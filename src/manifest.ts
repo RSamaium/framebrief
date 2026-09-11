@@ -20,10 +20,14 @@ const point = (p: { x: number; y: number }) =>
   p.y >= 0 &&
   p.y <= 1;
 export function validateDraft(d: DraftAnnotation, videos: VideoAsset[]): void {
+  if (d.scope !== undefined && d.scope !== "media")
+    throw new Error("Portée invalide.");
   if (d.channel !== undefined && !["audio", "video"].includes(d.channel))
     throw new Error("Canal invalide.");
   const v = videos.find((v) => v.id === d.videoId);
   if (!v) throw new Error("Vidéo inconnue : le média ciblé n’existe pas.");
+  if (d.scope === "media" && (d.startTime !== 0 || d.endTime !== v.duration))
+    throw new Error("Une instruction globale doit couvrir tout le média.");
   if (d.assistance !== undefined && d.assistance !== "continue-video")
     throw new Error("Aide inconnue.");
   if (d.referenceImages !== undefined) {
@@ -122,8 +126,12 @@ export function describeAnnotation(
   videos: VideoAsset[],
 ): string {
   const name = (id: string) => videos.find((v) => v.id === id)?.name ?? id;
+  const source = videos.find((v) => v.id === a.videoId)?.source;
   return (
     `${name(a.videoId)} [${a.videoId}] · ${a.startTime.toFixed(3)} s${a.endTime !== undefined ? ` → ${a.endTime.toFixed(3)} s` : ""}.` +
+    (source
+      ? ` Source éditable : ${source.path} (${source.engine}); rendu revu : ${source.renderPath}.`
+      : " Source éditable non renseignée : la vérifier avant traitement.") +
     (a.drawings?.length
       ? ` ${a.drawings.length} tracé(s), coordonnées normalisées, frame ${(a.frameTime ?? a.startTime).toFixed(3)} s ; positions fixes pendant la plage.`
       : "") +
@@ -136,6 +144,7 @@ export function describeAnnotation(
     (a.channel
       ? ` Cible : ${a.channel === "audio" ? "bande sonore" : "image"}.`
       : "") +
+    (a.scope === "media" ? " Portée : média entier." : "") +
     (a.intention ? ` Intention : ${a.intention}.` : "") +
     (a.referenceImages?.length
       ? ` Captures jointes : ${a.referenceImages.map((image) => `${image.purpose} à ${image.time.toFixed(3)} s (${image.width} × ${image.height})`).join(", ")}.`
@@ -161,6 +170,15 @@ export function parseManifest(value: unknown): ProjectManifest {
     throw new Error("Projet invalide.");
   const ids = new Set<string>();
   for (const v of raw.videos) {
+    if (
+      v?.source &&
+      (!["native", "hyperframes", "remotion", "manim", "other"].includes(
+        v.source.engine,
+      ) ||
+        !text(v.source.path) ||
+        !text(v.source.renderPath))
+    )
+      throw new Error("Source de production invalide.");
     if (
       !v ||
       !text(v.id) ||
@@ -219,6 +237,7 @@ export function annotationFromDraft(
   };
   for (const key of [
     "referenceImages",
+    "scope",
     "assistance",
     "channel",
     "endTime",

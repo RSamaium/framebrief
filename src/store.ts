@@ -28,6 +28,7 @@ export class ProjectStore extends EventTarget {
   private past: ProjectManifest[] = [];
   private future: ProjectManifest[] = [];
   storageError?: string;
+  storageKey: string | null = STORAGE_KEY;
   constructor(initial?: ProjectManifest) {
     super();
     this.project = initial ?? createProject();
@@ -56,6 +57,12 @@ export class ProjectStore extends EventTarget {
     this.project = parsed;
     this.commit();
   }
+  loadCheckpoint(project: ProjectManifest): void {
+    this.project = parseManifest(project);
+    this.past = [];
+    this.future = [];
+    this.dispatchEvent(new Event("change"));
+  }
   rename(name: string): void {
     this.checkpoint();
     this.project.name = name.trim() || "Sans titre";
@@ -72,6 +79,15 @@ export class ProjectStore extends EventTarget {
     this.checkpoint();
     this.project.videos.push(video);
     this.commit();
+  }
+  setMediaSource(videoId: string, source: VideoAsset["source"]): VideoAsset {
+    if (!source) throw new Error("Source requise.");
+    const project = structuredClone(this.project),
+      asset = project.videos.find((v) => v.id === videoId);
+    if (!asset) throw new Error("Média inconnu.");
+    asset.source = source;
+    this.replace(project);
+    return structuredClone(asset);
   }
   removeVideo(id: string): void {
     this.checkpoint();
@@ -139,7 +155,8 @@ export class ProjectStore extends EventTarget {
   private commit(): void {
     this.project.updatedAt = new Date().toISOString();
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.project));
+      if (this.storageKey)
+        localStorage.setItem(this.storageKey, JSON.stringify(this.project));
       this.storageError = undefined;
     } catch {
       this.storageError = "Sauvegarde indisponible. Exportez avec la palette.";

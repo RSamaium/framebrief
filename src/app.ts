@@ -14,6 +14,7 @@ import { installWebMcp } from "./webmcp";
 import { renderVideoMd } from "./video-brief";
 import { restoreMedia, saveMedia } from "./media-cache";
 import { PROMPT_GROUPS } from "./prompt-aids";
+import type { WorkspaceState } from "./workspace-client";
 
 const esc = (s: string) =>
   s.replace(
@@ -48,6 +49,71 @@ export class FramebriefApp {
   private palette: HTMLDialogElement;
   private selectedDrawing?: number;
   private manualLayout = false;
+  private workspaceVersions: Record<string, string> = {};
+  private workspaceMode = false;
+  private loadingWorkspace = false;
+  canReloadWorkspace(): boolean {
+    return (
+      !this.loadingWorkspace && !this.draft && !this.saving && !this.importing
+    );
+  }
+  reportWorkspace(message: string): void {
+    this.toast(message);
+  }
+  async loadWorkspace(state: WorkspaceState): Promise<void> {
+    this.loadingWorkspace = true;
+    this.root.inert = true;
+    try {
+      this.workspaceMode = true;
+      const active = this.active;
+      this.player.pause();
+      this.cancel();
+      for (const [id, runtime] of this.media) {
+        if (
+          !state.project.videos.some((v) => v.id === id) ||
+          this.workspaceVersions[id] !== state.mediaVersions[id]
+        ) {
+          URL.revokeObjectURL(runtime.url);
+          this.media.delete(id);
+        }
+      }
+      this.store.loadCheckpoint(state.project);
+      for (const asset of state.project.videos) {
+        if (
+          !asset.source ||
+          this.media.has(asset.id) ||
+          state.mediaVersions[asset.id] === "missing"
+        )
+          continue;
+        const res = await fetch(
+          `/api/workspace/media?id=${encodeURIComponent(asset.id)}&revision=${encodeURIComponent(state.mediaVersions[asset.id] ?? "")}`,
+          { cache: "no-store" },
+        );
+        if (!res.ok) {
+          this.toast(`Rendu introuvable : ${asset.name}`);
+          continue;
+        }
+        const file = new File([await res.blob()], asset.name, {
+          type: asset.type,
+        });
+        try {
+          const inspected = await inspectMedia(file);
+          this.media.set(asset.id, inspected.runtime);
+        } catch {
+          this.toast(`Le navigateur ne peut pas lire ${asset.name}.`);
+        }
+      }
+      this.workspaceVersions = state.mediaVersions;
+      this.activate(
+        state.project.videos.some((v) => v.id === active)
+          ? active
+          : state.project.videos[0]?.id,
+      );
+    } finally {
+      this.loadingWorkspace = false;
+      this.root.inert = false;
+    }
+  }
   constructor(
     private root: HTMLElement,
     store = ProjectStore.restore(),
@@ -220,6 +286,7 @@ export class FramebriefApp {
         getProject: () => parseManifest(this.store.project),
         saveAnnotation: (d) => this.saveWithImages(d),
         updateBrief: (brief) => this.store.updateBrief(brief),
+        setMediaSource: (id, source) => this.store.setMediaSource(id, source),
         captureFrame: (input) => this.captureFrame(input),
       });
     } catch (error) {
@@ -232,6 +299,7 @@ export class FramebriefApp {
     if (typeof indexedDB === "undefined") return;
     await Promise.all(
       this.store.project.videos.map(async (asset) => {
+        if (asset.source) return;
         if (this.media.has(asset.id) || this.restoring.has(asset.id)) return;
         this.restoring.add(asset.id);
         try {
@@ -348,6 +416,27 @@ export class FramebriefApp {
       index.setAttribute("aria-label", `Annotations de ${v.name}`);
       track.append(index);
       this.addTrackScrollbar(track, v);
+      const whole = document.createElement("button");
+      whole.className = "annotate-media";
+      whole.textContent = "Annoter toute la vidéo";
+      whole.onclick = (e) => {
+        this.cancel();
+        this.activate(id);
+        this.seek(0);
+        this.draft = {
+          videoId: id,
+          scope: "media",
+          startTime: 0,
+          endTime: v.duration,
+          frameTime: 0,
+          prompt: "",
+          drawings: [],
+        };
+        this.anchor = { x: e.clientX, y: e.clientY };
+        this.showPopover();
+        this.paintMarkers();
+      };
+      track.append(whole);
       track
         .querySelector(".track-label")!
         .addEventListener("click", (event) => {
@@ -798,8 +887,57 @@ export class FramebriefApp {
         this.draft!.volume = Number(range.value) / 100;
         this.pop.querySelector("output")!.textContent = `${range.value} %`;
       };
+    this.addDestinationPicker();
     this.positionPopover();
     this.paintDrawings();
+  }
+  private addDestinationPicker(): void {
+    const d = this.draft!;
+    const targets = this.store.project.videos.filter(
+      (v) => v.id !== d.videoId && v.kind !== "audio",
+    );
+    if (!targets.length) return;
+    const group = document.createElement("details");
+    group.className = "destination-picker";
+    group.innerHTML = `<summary>↗ Insérer dans une autre piste</summary><div class="destination-targets">${targets.map((v) => `<button type="button" data-target="${esc(v.id)}">${esc(v.name)}</button>`).join("")}</div><label hidden>À <input aria-label="Temps de destination en secondes" type="number" min="0" step="0.1" value="0"> s <button type="button" class="confirm-destination">Insérer ici</button></label>`;
+    this.pop.querySelector(".popover-bottom")!.before(group);
+    let selected: VideoAsset | undefined;
+    group.querySelectorAll<HTMLButtonElement>("[data-target]").forEach(
+      (b) =>
+        (b.onclick = () => {
+          selected = targets.find((v) => v.id === b.dataset.target);
+          group.querySelector("label")!.hidden = false;
+          const input = group.querySelector("input")!;
+          input.max = String(selected!.duration);
+          group
+            .querySelectorAll("[data-target]")
+            .forEach((el) => el.classList.toggle("chosen", el === b));
+          this.positionPopover();
+        }),
+    );
+    group.querySelector<HTMLButtonElement>(".confirm-destination")!.onclick =
+      () => {
+        const time = Number(group.querySelector("input")!.value);
+        if (
+          !selected ||
+          !Number.isFinite(time) ||
+          time < 0 ||
+          time > selected.duration
+        ) {
+          this.toast("Choisissez un temps dans la piste de destination.");
+          return;
+        }
+        this.rememberDraft();
+        d.destination = { videoId: selected.id, time };
+        const source = this.store.project.videos.find(
+          (v) => v.id === d.videoId,
+        )!;
+        d.prompt +=
+          (d.prompt ? "\n" : "") +
+          `Insérer ${d.scope === "media" ? "toute la vidéo" : `le passage de ${d.startTime.toFixed(3)} s à ${(d.endTime ?? d.startTime).toFixed(3)} s`} « ${source.name} » dans « ${selected.name} » à ${time.toFixed(3)} s.`;
+        this.showPopover();
+        this.paintMarkers();
+      };
   }
   private positionPopover(): void {
     if (this.pop.hidden) return;
@@ -1048,6 +1186,24 @@ export class FramebriefApp {
       try {
         this.toast(`Ouverture de ${file.name}…`);
         const { asset, runtime } = await inspectMedia(file);
+        if (this.workspaceMode) {
+          const response = await fetch(
+            `/api/workspace/import?name=${encodeURIComponent(file.name)}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/octet-stream" },
+              body: file,
+            },
+          );
+          if (!response.ok) {
+            URL.revokeObjectURL(runtime.url);
+            throw new Error(
+              "Impossible de conserver le média dans le workspace.",
+            );
+          }
+          const { path } = await response.json();
+          asset.source = { engine: "native", path, renderPath: path };
+        }
         const match = matchAsset(
           file,
           this.store.project.videos.filter((v) => !this.media.has(v.id)),
@@ -1177,6 +1333,12 @@ export class FramebriefApp {
         if (name) this.store.rename(name);
       }
       if (cmd === "new") {
+        if (this.workspaceMode) {
+          this.toast(
+            "Ouvrez un autre workspace avec Framebrief pour commencer un autre projet.",
+          );
+          return;
+        }
         this.cancel();
         this.store.replace(createProject());
         this.activate(undefined);

@@ -38,6 +38,37 @@ describe("time and region utilities", () => {
 });
 
 describe("manifest contract", () => {
+  it("preserves whole-media scope, editable provenance and exact insertion target", () => {
+    const v = {
+      ...video,
+      source: {
+        engine: "hyperframes" as const,
+        path: "composition/index.html",
+        renderPath: "renders/current.mp4",
+      },
+    };
+    const store = new ProjectStore({
+      ...createProject(),
+      videos: [v, { ...video, id: "destination" }],
+    });
+    const a = store.saveAnnotation({
+      videoId: v.id,
+      scope: "media",
+      startTime: 0,
+      endTime: v.duration,
+      prompt: "Enlever le fond vert puis insérer ici",
+      destination: { videoId: "destination", time: 2.375 },
+    });
+    const restored = parseManifest(
+      JSON.parse(serializeManifest(store.project)),
+    );
+    expect(restored.annotations[0]).toEqual(a);
+    expect(a.context).toContain("composition/index.html (hyperframes)");
+    expect(a.context).toContain("média entier");
+    expect(() => store.saveAnnotation({ ...a, startTime: 1 })).toThrow(
+      "tout le média",
+    );
+  });
   it("migrates existing projects to a deterministic VIDEO.md brief", () => {
     const legacy = {
       ...createProject(),

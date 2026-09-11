@@ -22,6 +22,11 @@ export interface Region {
 }
 
 export interface VideoAsset {
+  source?: {
+    engine: "native" | "hyperframes" | "remotion" | "manim" | "other";
+    path: string;
+    renderPath: string;
+  };
   kind?: "video" | "audio";
   id: string;
   name: string;
@@ -35,6 +40,7 @@ export interface VideoAsset {
 }
 
 export interface Annotation {
+  scope?: "media";
   channel?: "audio" | "video";
   referenceImages?: ReferenceImage[];
   assistance?: "continue-video";
@@ -112,6 +118,7 @@ export interface VideoBrief {
 }
 
 export interface DraftAnnotation {
+  scope?: "media";
   channel?: "audio" | "video";
   referenceImages?: ReferenceImage[];
   assistance?: "continue-video";

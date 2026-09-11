@@ -148,5 +148,25 @@ it("keeps the player and prompt intact during project changes; keyboard does not
   expect(root.querySelector(".popover-head")!.textContent).toContain(
     "2 tracé(s)",
   );
+  root.querySelector<HTMLButtonElement>(".annotate-media")!.click();
+  expect(root.querySelector(".popover-head")!.textContent).toContain(
+    "00:00,0 — 00:02,0",
+  );
+  expect(root.querySelector(".destination-picker")).toBeNull();
+  store.addVideo({ ...p.videos[0], id: "target", name: "destination.webm" });
+  root.querySelector<HTMLButtonElement>(".annotate-media")!.click();
+  root.querySelector<HTMLButtonElement>('[data-target="target"]')!.click();
+  root.querySelector<HTMLInputElement>(".destination-picker input")!.value =
+    "1.25";
+  root.querySelector<HTMLButtonElement>(".confirm-destination")!.click();
+  expect(root.querySelector<HTMLTextAreaElement>("textarea")!.value).toContain(
+    "toute la vidéo",
+  );
+  expect(root.querySelector<HTMLTextAreaElement>("textarea")!.value).toContain(
+    "1.250 s",
+  );
+  expect(root.querySelector(".link-summary")!.textContent).toContain(
+    "destination.webm",
+  );
   root.remove();
 });

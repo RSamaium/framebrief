@@ -1,14 +1,16 @@
 {
   "name": "framebrief",
-  "private": true,
+  "private": false,
   "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && vite build --ssr src/standalone-server.ts --outDir dist-server",
     "test": "vitest run",
     "test:watch": "vitest"
   },
+  "bin": { "framebrief": "bin/framebrief.mjs" },
+  "files": ["dist", "dist-server", "bin", "README.md"],
   "devDependencies": {
     "@types/node": "^24.0.0",
     "fake-indexeddb": "^6.2.5",

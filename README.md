@@ -13,6 +13,21 @@ Le projet fonctionne entièrement dans le navigateur. Les métadonnées et annot
 
 ## Gestes
 
+- « Annoter toute la vidéo » sélectionne le média entier et donne au JSON la portée `media`.
+- « Insérer dans une autre piste » dans le prompt permet de choisir une destination et son temps exact en secondes ; cette aide apparaît uniquement avec une autre piste vidéo. L’instruction générée reste éditable et la relation source/destination est enregistrée séparément.
+
+## Reprendre un workspace de production
+
+Après `npm link` dans le dépôt Framebrief, lancer `framebrief serve --workspace /chemin/absolu/du/projet --port 5174`, puis ouvrir l’URL indiquée. Le serveur utilise le `dist` empaqueté, pas le projet source. L’agent lit `VIDEO.md` dans ce dossier et ouvre le checkpoint `video.review.json`, sans reprendre le projet du stockage navigateur.
+
+Les annotations sont sauvegardées automatiquement dans ce JSON. Les fichiers déposés sont copiés dans `.framebrief/media/`. `VIDEO.md` est créé si absent ; un brief existant est préservé et synchronisé explicitement par l’agent. Une écriture concurrente du checkpoint interrompt la sauvegarde avec un message, sans écraser la version disque ; exporter les modifications locales avant de recharger pour les conserver.
+
+`videos[].source` contient `{ engine, path, renderPath }` : source éditable et aperçu rendu, avec chemins relatifs au workspace. L’outil WebMCP `set_video_source` renseigne ce lien. Un MP4 issu d’HyperFrames se modifie dans sa composition ; une source native se traite avec FFmpeg. Les chemins résolus doivent rester dans le workspace.
+
+Après rendu, l’agent archive les instructions traitées, met à jour le fichier rendu et les métadonnées FFprobe du checkpoint, et retire uniquement les annotations appliquées. L’application détecte les changements toutes les 1,5 secondes et recharge lecteur, vignettes et forme d’onde. La mise à jour attend la fermeture d’un prompt en cours. Un checkpoint chargé depuis le disque ouvre un nouvel historique d’annulation.
+
+Le mode workspace est fourni par le serveur local Framebrief ; un hébergement statique conserve le mode navigateur/export JSON.
+
 - Avec une seule piste, la zone vidéo s’agrandit automatiquement ; le séparateur permet toujours un réglage manuel.
 - Cliquer sur l’en-tête positionne le curseur au temps correspondant sous la souris, sans créer d’annotation.
 - La petite bande sous les vignettes représente le son de la vidéo : cliquer ou glisser crée une annotation `channel: audio`. Une forme d’onde indisponible est signalée si le navigateur ne peut pas décoder le son.

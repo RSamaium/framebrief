@@ -1,4 +1,9 @@
-import type { DraftAnnotation, ProjectManifest, VideoBrief } from "./types";
+import type {
+  DraftAnnotation,
+  ProjectManifest,
+  VideoBrief,
+  VideoAsset,
+} from "./types";
 import { parseManifest } from "./manifest";
 import { renderVideoMd } from "./video-brief";
 
@@ -33,6 +38,10 @@ export interface WebMcpDependencies {
   getProject: () => ProjectManifest;
   saveAnnotation: (draft: DraftAnnotation) => unknown;
   updateBrief?: (brief: VideoBrief) => VideoBrief;
+  setMediaSource?: (
+    videoId: string,
+    source: VideoAsset["source"],
+  ) => VideoAsset;
 }
 
 const response = (
@@ -46,6 +55,7 @@ const response = (
 const annotationSchema = {
   type: "object",
   properties: {
+    scope: { type: "string", enum: ["media"] },
     channel: { type: "string", enum: ["audio", "video"] },
     assistance: { type: "string", enum: ["continue-video"] },
     frameTime: { type: "number", minimum: 0 },
@@ -134,6 +144,39 @@ export function registerWebMcpTools(
   dependencies: WebMcpDependencies,
 ): boolean {
   if (!context?.registerTool) return false;
+  if (dependencies.setMediaSource)
+    context.registerTool({
+      name: "set_video_source",
+      title: "Relier la source de production",
+      description:
+        "Associe un média affiché à sa source éditable et à son fichier rendu. Modifier la source HyperFrames/Remotion/Manim avant de régénérer son aperçu ; FFmpeg pour une source native.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          videoId: { type: "string" },
+          source: {
+            type: "object",
+            properties: {
+              engine: {
+                type: "string",
+                enum: ["native", "hyperframes", "remotion", "manim", "other"],
+              },
+              path: { type: "string" },
+              renderPath: { type: "string" },
+            },
+            required: ["engine", "path", "renderPath"],
+          },
+        },
+        required: ["videoId", "source"],
+      },
+      execute: (input) =>
+        response(
+          dependencies.setMediaSource!(
+            String(input.videoId),
+            input.source as VideoAsset["source"],
+          ),
+        ),
+    });
 
   context.registerTool({
     name: "get_video_annotation_project",
