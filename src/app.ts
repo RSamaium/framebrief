@@ -13,7 +13,7 @@ import { drawingSvg, paintDrawing } from "./drawings";
 import { installWebMcp } from "./webmcp";
 import { renderVideoMd } from "./video-brief";
 import { restoreMedia, saveMedia } from "./media-cache";
-import { PROMPT_GROUPS } from "./prompt-aids";
+import { PROMPT_GROUPS, START_GROUPS, END_GROUPS } from "./prompt-aids";
 import type { WorkspaceState } from "./workspace-client";
 
 const esc = (s: string) =>
@@ -144,29 +144,18 @@ export class FramebriefApp {
     finish.textContent = "Terminer les dessins →";
     finish.hidden = true;
     root.querySelector(".draw-tools")!.append(finish);
-    root
-      .querySelector(".timeline-top")!
-      .insertAdjacentHTML(
-        "afterbegin",
-        '<div class="timeline-modes"><button data-navigation="select" aria-pressed="true" title="Sélectionner une plage">↖ <span>Sélection</span></button><button data-navigation="pan" aria-pressed="false" title="Glisser pour parcourir la piste">✋ <span>Déplacer</span></button></div>',
-      );
-    root.querySelectorAll<HTMLElement>("[data-navigation]").forEach(
-      (b) =>
-        (b.onclick = () => {
-          this.timelineMode = b.dataset.navigation as "select" | "pan";
-          root
-            .querySelectorAll("[data-navigation]")
-            .forEach((el) =>
-              el.setAttribute(
-                "aria-pressed",
-                String(
-                  (el as HTMLElement).dataset.navigation === this.timelineMode,
-                ),
-              ),
-            );
-          this.tracks.classList.toggle("pan-mode", this.timelineMode === "pan");
-        }),
-    );
+    let lastTrackStep = 0;
+    this.tracks.addEventListener("wheel", (event) => {
+      if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY) || this.store.project.videos.length < 2) return;
+      event.preventDefault();
+      if (this.draft || Math.abs(event.deltaY) < 4 || Date.now() - lastTrackStep < 420) return;
+      const videos = this.store.project.videos;
+      const index = videos.findIndex(v => v.id === this.active);
+      const next = videos[clamp(index + Math.sign(event.deltaY), 0, videos.length - 1)];
+      if (next.id === this.active) return;
+      lastTrackStep = Date.now();
+      this.activate(next.id);
+    }, { passive: false });
     const footer = document.createElement("footer");
     footer.className = "playback-bar";
     footer.append(root.querySelector(".transport")!);
@@ -329,6 +318,7 @@ export class FramebriefApp {
     return this.store.project.videos.find((v) => v.id === this.active);
   }
   private activate(id?: string): void {
+    const changed = this.active !== id;
     if (this.active !== id) this.player.pause();
     this.active = id;
     const v = this.asset(),
@@ -355,6 +345,12 @@ export class FramebriefApp {
       ? this.waveform(runtime.waveform ?? [], 720)
       : "";
     this.renderTracks();
+    if (changed && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      this.tracks.querySelector<HTMLElement>(".track.active")?.animate?.(
+        [{ opacity: 0, transform: "translateY(8px) scale(.985)" }, { opacity: 1, transform: "translateY(0) scale(1)" }],
+        { duration: 240, easing: "cubic-bezier(.16,1,.3,1)" },
+      );
+    }
     this.fitStage();
     this.seek(this.time);
     this.setMode("select");
@@ -384,7 +380,7 @@ export class FramebriefApp {
     if (!this.manualLayout)
       this.root.style.setProperty(
         "--scene-height",
-        `max(180px, calc(100dvh - ${this.store.project.videos.length <= 1 ? 380 : 510}px))`,
+        `max(180px, calc(100dvh - 380px))`,
       );
     const scroll = this.tracks.scrollTop;
     this.tracks.innerHTML = this.store.project.videos
@@ -396,6 +392,19 @@ export class FramebriefApp {
       })
       .join("");
     this.tracks.scrollTop = scroll;
+    this.root.querySelectorAll(".track-step").forEach(el => el.remove());
+    const activeIndex = this.store.project.videos.findIndex(v => v.id === this.active);
+    for (const step of [-1, 1]) {
+      const target = this.store.project.videos[activeIndex + step];
+      if (!target || activeIndex < 0) continue;
+      const button = document.createElement("button");
+      button.className = `track-step ${step < 0 ? "previous" : "next"}`;
+      button.innerHTML = `<svg width="16" height="12" viewBox="0 0 16 12" aria-hidden="true"><path d="${step < 0 ? "M3 8 8 3 13 8" : "M3 4 8 9 13 4"}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+      button.title = `${step < 0 ? "Piste précédente" : "Piste suivante"} : ${target.name}`;
+      button.setAttribute("aria-label", button.title);
+      button.onclick = () => { this.cancel(); this.activate(target.id); };
+      this.tracks.before(button);
+    }
     this.tracks.querySelectorAll<HTMLElement>(".track").forEach((track) => {
       const id = track.dataset.video!,
         v = this.store.project.videos.find((v) => v.id === id)!;
@@ -416,27 +425,31 @@ export class FramebriefApp {
       index.setAttribute("aria-label", `Annotations de ${v.name}`);
       track.append(index);
       this.addTrackScrollbar(track, v);
-      const whole = document.createElement("button");
-      whole.className = "annotate-media";
-      whole.textContent = "Annoter toute la vidéo";
-      whole.onclick = (e) => {
-        this.cancel();
-        this.activate(id);
-        this.seek(0);
-        this.draft = {
-          videoId: id,
-          scope: "media",
-          startTime: 0,
-          endTime: v.duration,
-          frameTime: 0,
-          prompt: "",
-          drawings: [],
+      const edges = document.createElement("div");
+      edges.className = "edge-actions";
+      for (const end of [false, true]) {
+        const edit = document.createElement("button");
+        edit.className = end ? "edit-end" : "edit-start";
+        edit.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z"/></svg>';
+        edit.title = end ? "Annoter la fin ou imaginer la suite" : "Annoter le début ou toute la vidéo";
+        edit.setAttribute("aria-label", edit.title);
+        edit.onpointerdown = (e) => e.stopPropagation();
+        edit.onclick = (e) => {
+          this.cancel();
+          this.activate(id);
+          this.seek(end ? v.duration : 0);
+          this.draft = { videoId: id, startTime: end ? v.duration : 0, frameTime: end ? v.duration : 0, prompt: "", drawings: [] };
+          this.anchor = { x: e.clientX, y: e.clientY };
+          this.showPopover();
+          this.paintMarkers();
         };
-        this.anchor = { x: e.clientX, y: e.clientY };
-        this.showPopover();
-        this.paintMarkers();
-      };
-      track.append(whole);
+        edges.append(edit);
+      }
+      const shell = document.createElement("div");
+      shell.className = `lane-shell ${v.kind !== "audio" ? "has-audio" : ""}`;
+      const trackLane = track.querySelector(".lane")!;
+      trackLane.before(shell);
+      shell.append(trackLane, edges);
       track
         .querySelector(".track-label")!
         .addEventListener("click", (event) => {
@@ -855,29 +868,33 @@ export class FramebriefApp {
   }
   private showPopover(): void {
     if (!this.draft) return;
+    this.root.querySelectorAll(".destination-picker").forEach(el => el.remove());
     const d = this.draft;
+    const duration = this.store.project.videos.find(v => v.id === d.videoId)!.duration;
+    const groups = d.startTime === 0 ? START_GROUPS : d.startTime === duration ? END_GROUPS : PROMPT_GROUPS;
     this.pop.hidden = false;
     this.pop.innerHTML = `<div class="popover-head"><span>${formatTime(d.startTime, true)}${d.endTime !== undefined ? ` — ${formatTime(d.endTime, true)}` : ""}${d.drawings?.length ? ` · ${d.drawings.length} tracé(s)` : ""}</span><button data-cmd="cancel" aria-label="Fermer">×</button></div>
-      ${d.destination ? `<p class="link-summary">↗ ${esc(this.store.project.videos.find((v) => v.id === d.destination!.videoId)?.name ?? "")} · ${formatTime(d.destination.time, true)} <button data-cmd="unlink" title="Retirer le lien">×</button></p>` : ""}
-      <textarea aria-label="Votre intention" placeholder="Qu’aimeriez-vous changer ici ?" rows="2">${esc(d.prompt)}</textarea>
-      <div class="prompt-groups">${PROMPT_GROUPS.map((group, g) => `<section class="prompt-group"><h3><span>${group.icon}</span>${group.label}</h3><div class="suggestions">${group.items.map((item, i) => `<button data-aid="${g}:${i}">${item.label}</button>`).join("")}</div></section>`).join("")}</div>
+      <div class="prompt-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Votre intention" data-placeholder="Votre idée… @ pour mentionner une piste">${esc(d.prompt)}</div>
+      <div class="prompt-groups">${groups.map((group, g) => `<section class="prompt-group"><h3><span>${group.icon}</span>${group.label}</h3><div class="suggestions">${group.items.map((item, i) => `<button data-aid="${g}:${i}">${item.label}</button>`).join("")}</div></section>`).join("")}</div>
       ${d.referenceImages?.[0] ? `<div class="reference-preview"><img src="${d.referenceImages[0].dataUrl}" alt="Capture jointe à cette instruction"><span>Capture jointe</span></div>` : ""}
       <div class="popover-bottom"><button data-cmd="volume" title="Indiquer un volume">♫</button>${d.volume !== undefined ? `<label>Volume <input aria-label="Volume souhaité" type="range" min="0" max="100" value="${d.volume * 100}"><output>${Math.round(d.volume * 100)} %</output></label>` : ""}<span></span>${d.id ? '<button data-cmd="delete" title="Supprimer l’annotation">⌫</button>' : ""}<button class="save" data-cmd="save">${d.id ? "Enregistrer" : "Annoter"} ↗</button></div>`;
-    this.pop.querySelector("textarea")!.oninput = (e) => {
+    this.pop.querySelector<HTMLElement>(".prompt-editor")!.oninput = (e) => {
       if (this.draft)
-        this.draft.prompt = (e.target as HTMLTextAreaElement).value;
+        this.draft.prompt = (e.target as HTMLElement).innerText ?? (e.target as HTMLElement).textContent ?? "";
     };
     this.pop.querySelectorAll<HTMLButtonElement>("[data-aid]").forEach(
       (b) =>
         (b.onclick = () => {
           if (this.draft) {
             const [g, i] = b.dataset.aid!.split(":").map(Number);
-            const item = PROMPT_GROUPS[g].items[i];
+            const item = groups[g].items[i];
+            if (item.scope === "media") { this.draft.scope = "media"; this.draft.startTime = 0; this.draft.endTime = duration; }
             this.draft.prompt += (this.draft.prompt ? "\n" : "") + item.prompt;
             if ("assistance" in item && item.assistance)
               this.draft.assistance = item.assistance;
             b.classList.add("used");
-            this.pop.querySelector("textarea")!.value = this.draft.prompt;
+            this.showPopover();
+            this.paintMarkers();
           }
         }),
     );
@@ -888,56 +905,132 @@ export class FramebriefApp {
         this.pop.querySelector("output")!.textContent = `${range.value} %`;
       };
     this.addDestinationPicker();
+    this.pop.querySelector<HTMLButtonElement>(".scope-toggle")?.addEventListener("click", () => {
+      if (d.scope === "media") { delete d.scope; delete d.endTime; }
+      else { d.scope = "media"; d.endTime = this.store.project.videos.find(v => v.id === d.videoId)!.duration; }
+      this.showPopover();
+      this.paintMarkers();
+    });
     this.positionPopover();
     this.paintDrawings();
   }
   private addDestinationPicker(): void {
     const d = this.draft!;
-    const targets = this.store.project.videos.filter(
-      (v) => v.id !== d.videoId && v.kind !== "audio",
-    );
+    const editor = this.pop.querySelector<HTMLElement>(".prompt-editor")!;
+    const targets = this.store.project.videos.filter(v => v.id !== d.videoId && v.kind !== "audio");
     if (!targets.length) return;
-    const group = document.createElement("details");
-    group.className = "destination-picker";
-    group.innerHTML = `<summary>↗ Insérer dans une autre piste</summary><div class="destination-targets">${targets.map((v) => `<button type="button" data-target="${esc(v.id)}">${esc(v.name)}</button>`).join("")}</div><label hidden>À <input aria-label="Temps de destination en secondes" type="number" min="0" step="0.1" value="0"> s <button type="button" class="confirm-destination">Insérer ici</button></label>`;
-    this.pop.querySelector(".popover-bottom")!.before(group);
-    let selected: VideoAsset | undefined;
-    group.querySelectorAll<HTMLButtonElement>("[data-target]").forEach(
-      (b) =>
-        (b.onclick = () => {
-          selected = targets.find((v) => v.id === b.dataset.target);
-          group.querySelector("label")!.hidden = false;
-          const input = group.querySelector("input")!;
-          input.max = String(selected!.duration);
-          group
-            .querySelectorAll("[data-target]")
-            .forEach((el) => el.classList.toggle("chosen", el === b));
-          this.positionPopover();
-        }),
-    );
-    group.querySelector<HTMLButtonElement>(".confirm-destination")!.onclick =
-      () => {
-        const time = Number(group.querySelector("input")!.value);
-        if (
-          !selected ||
-          !Number.isFinite(time) ||
-          time < 0 ||
-          time > selected.duration
-        ) {
-          this.toast("Choisissez un temps dans la piste de destination.");
-          return;
-        }
-        this.rememberDraft();
-        d.destination = { videoId: selected.id, time };
-        const source = this.store.project.videos.find(
-          (v) => v.id === d.videoId,
-        )!;
-        d.prompt +=
-          (d.prompt ? "\n" : "") +
-          `Insérer ${d.scope === "media" ? "toute la vidéo" : `le passage de ${d.startTime.toFixed(3)} s à ${(d.endTime ?? d.startTime).toFixed(3)} s`} « ${source.name} » dans « ${selected.name} » à ${time.toFixed(3)} s.`;
-        this.showPopover();
-        this.paintMarkers();
+    const panel = document.createElement("div");
+    panel.className = "destination-picker";
+    panel.hidden = true;
+    editor.after(panel);
+    let selected = targets.find(v => v.id === d.destination?.videoId);
+    let mentionRange: Range | undefined;
+    const sync = () => {
+      d.prompt = editor.innerText ?? editor.textContent ?? "";
+      if (!editor.querySelector(".prompt-tag")) delete d.destination;
+    };
+    const token = () => selected ? `@${selected.name}${d.destination ? ` · ${d.destination.time.toFixed(3)} s` : ""}` : "";
+    const createTag = () => {
+      const tag = document.createElement("span");
+      tag.className = "prompt-tag";
+      tag.contentEditable = "false";
+      tag.tabIndex = 0;
+      tag.setAttribute("role", "button");
+      tag.textContent = token();
+      tag.title = "Choisir l’endroit dans cette piste";
+      tag.onclick = openTime;
+      tag.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); openTime(); } };
+      return tag;
+    };
+    const openTime = () => {
+      if (!selected) return;
+      this.root.append(panel);
+      panel.classList.add("time-tooltip");
+      panel.hidden = false;
+      panel.innerHTML = `<div class="visual-time"><div class="popover-head"><span></span></div><video muted playsinline preload="auto"></video><label>Placer à cet endroit<input aria-label="Temps de destination en secondes" type="range" min="0" step="0.01"><output></output></label></div>`;
+      panel.querySelector(".popover-head span")!.textContent = selected.name;
+      const input = panel.querySelector("input")!, preview = panel.querySelector("video")!;
+      input.max = String(selected.duration);
+      input.value = String(d.destination?.time ?? 0);
+      const runtime = this.media.get(selected.id);
+      preview.hidden = !runtime;
+      const update = () => {
+        panel.querySelector("output")!.textContent = formatTime(Number(input.value), true);
+        if (runtime && preview.readyState >= 1) preview.currentTime = Math.min(Number(input.value), Math.max(0, selected!.duration - 0.04));
       };
+      if (runtime) { preview.src = runtime.url; preview.onloadedmetadata = update; }
+      else { const note = document.createElement("p"); note.textContent = "Réassociez cette vidéo pour voir l’aperçu."; preview.after(note); }
+      update();
+      input.oninput = () => {
+        update();
+        const time = Number(input.value);
+        if (!Number.isFinite(time) || time < 0 || time > selected!.duration) return;
+        this.rememberDraft();
+        d.destination = { videoId: selected!.id, time };
+        editor.querySelector(".prompt-tag")!.textContent = token();
+        sync(); this.paintMarkers();
+      };
+      const rect = this.pop.getBoundingClientRect();
+      panel.style.left = `${clamp(rect.right + 12 + 430 <= innerWidth ? rect.right + 12 : rect.left - 442, 12, Math.max(12, innerWidth - 442))}px`;
+      panel.style.top = `${clamp(rect.top, 12, Math.max(12, innerHeight - panel.offsetHeight - 12))}px`;
+    };
+    editor.addEventListener("pointerdown", e => { if (!(e.target as Element).closest(".prompt-tag")) panel.hidden = true; });
+    editor.addEventListener("focus", () => { panel.hidden = true; });
+    if (selected && d.destination) {
+      const oldToken = `@${selected.name}`;
+      const start = d.prompt.indexOf(oldToken);
+      // Keep the rest of the user's prose intact when restoring a saved mention.
+      const match = start < 0 ? undefined : d.prompt.slice(start).match(/^@.*?(?: · [\d.]+ s| #[^\n]*?\([\d.]+ s\))(?=\s|$)/);
+      editor.textContent = start < 0 ? d.prompt : d.prompt.slice(0, start);
+      editor.append(createTag());
+      editor.append(document.createTextNode(start < 0 ? " " : d.prompt.slice(start + (match?.[0].length ?? oldToken.length))));
+    }
+    editor.addEventListener("input", () => {
+      sync();
+      const selection = window.getSelection();
+      if (!selection?.rangeCount || !selection.anchorNode || !editor.contains(selection.anchorNode)) return;
+      const range = selection.getRangeAt(0);
+      if (range.startContainer.nodeType !== Node.TEXT_NODE) { panel.hidden = true; return; }
+      const before = range.startContainer.textContent!.slice(0, range.startOffset);
+      const match = before.match(/(?:^|\s)@([^@\n]*)$/);
+      if (!match) { panel.hidden = true; return; }
+      mentionRange = range.cloneRange();
+      mentionRange.setStart(range.startContainer, before.lastIndexOf("@"));
+      panel.replaceChildren();
+      panel.classList.remove("time-tooltip");
+      panel.style.left = ""; panel.style.top = "";
+      editor.after(panel);
+      panel.hidden = false;
+      for (const target of targets.filter(v => v.name.toLowerCase().includes(match[1].toLowerCase()))) {
+        const button = document.createElement("button");
+        button.dataset.target = target.id;
+        button.textContent = target.name;
+        button.onclick = () => {
+          selected = target;
+          // A destination is a single structured reference in the manifest.
+          editor.querySelector(".prompt-tag")?.replaceWith(document.createTextNode(editor.querySelector(".prompt-tag")!.textContent ?? ""));
+          d.destination = { videoId: target.id, time: 0 };
+          if (mentionRange) {
+            mentionRange.deleteContents();
+            const tag = createTag();
+            mentionRange.insertNode(tag);
+            const space = document.createTextNode(" ");
+            tag.after(space);
+            const caret = document.createRange(); caret.setStart(space, 1); caret.collapse(true);
+            editor.focus(); selection.removeAllRanges(); selection.addRange(caret);
+          }
+          sync(); panel.hidden = true;
+        };
+        panel.append(button);
+      }
+      this.positionPopover();
+    });
+    editor.addEventListener("keydown", e => {
+      if (panel.hidden || panel.querySelector(".visual-time")) return;
+      if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); panel.querySelector<HTMLButtonElement>("[data-target]")?.click(); }
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); panel.hidden = true; }
+      if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); panel.querySelector<HTMLButtonElement>("[data-target]")?.focus(); }
+    });
   }
   private positionPopover(): void {
     if (this.pop.hidden) return;
@@ -951,6 +1044,7 @@ export class FramebriefApp {
     }
   }
   private cancel(): void {
+    this.root.querySelectorAll(".destination-picker").forEach(el => el.remove());
     this.draft = undefined;
     this.selectedDrawing = undefined;
     this.draftPast = [];
@@ -1246,7 +1340,7 @@ export class FramebriefApp {
       !e.shiftKey &&
       this.draft &&
       (mod ||
-        (e.target instanceof Element && e.target.matches(".popover textarea")))
+        (e.target instanceof Element && !!e.target.closest(".prompt-editor")))
     ) {
       e.preventDefault();
       this.command("save");

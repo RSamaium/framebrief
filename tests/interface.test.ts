@@ -44,8 +44,8 @@ it("keeps the player and prompt intact during project changes; keyboard does not
   });
   const player = root.querySelector("video");
   root.querySelector<HTMLButtonElement>("[data-id]")!.click();
-  const input = root.querySelector<HTMLTextAreaElement>("textarea")!;
-  input.value = "Texte en cours";
+  const input = root.querySelector<HTMLElement>(".prompt-editor")!;
+  input.textContent = "Texte en cours";
   input.dispatchEvent(new Event("input"));
   input.dispatchEvent(
     new KeyboardEvent("keydown", { key: "r", bubbles: true }),
@@ -55,8 +55,8 @@ it("keeps the player and prompt intact during project changes; keyboard does not
   ).toBe(true);
   store.saveAnnotation({ videoId: "v", startTime: 0, prompt: "autre" });
   expect(root.querySelector("video")).toBe(player);
-  expect(root.querySelector("textarea")).toBe(input);
-  expect(input.value).toBe("Texte en cours");
+  expect(root.querySelector(".prompt-editor")).toBe(input);
+  expect(input.textContent).toBe("Texte en cours");
   input.dispatchEvent(
     new KeyboardEvent("keydown", {
       key: "Enter",
@@ -148,24 +148,33 @@ it("keeps the player and prompt intact during project changes; keyboard does not
   expect(root.querySelector(".popover-head")!.textContent).toContain(
     "2 tracé(s)",
   );
-  root.querySelector<HTMLButtonElement>(".annotate-media")!.click();
+  root.querySelector<HTMLButtonElement>(".edit-start")!.click();
+  root.querySelector<HTMLButtonElement>('[data-aid="0:0"]')!.click();
   expect(root.querySelector(".popover-head")!.textContent).toContain(
     "00:00,0 — 00:02,0",
   );
   expect(root.querySelector(".destination-picker")).toBeNull();
   store.addVideo({ ...p.videos[0], id: "target", name: "destination.webm" });
-  root.querySelector<HTMLButtonElement>(".annotate-media")!.click();
+  root.querySelector<HTMLButtonElement>(".edit-start")!.click();
+  root.querySelector<HTMLButtonElement>('[data-aid="0:0"]')!.click();
+  const editor = root.querySelector<HTMLElement>(".prompt-editor")!;
+  editor.textContent = "Insérer dans @";
+  const caret = document.createRange();
+  caret.setStart(editor.firstChild!, editor.textContent.length); caret.collapse(true);
+  window.getSelection()!.removeAllRanges(); window.getSelection()!.addRange(caret);
+  editor.dispatchEvent(new Event("input"));
   root.querySelector<HTMLButtonElement>('[data-target="target"]')!.click();
+  root.querySelector<HTMLElement>(".prompt-tag")!.click();
   root.querySelector<HTMLInputElement>(".destination-picker input")!.value =
     "1.25";
-  root.querySelector<HTMLButtonElement>(".confirm-destination")!.click();
-  expect(root.querySelector<HTMLTextAreaElement>("textarea")!.value).toContain(
-    "toute la vidéo",
+  root.querySelector<HTMLInputElement>(".destination-picker input")!.dispatchEvent(new Event("input"));
+  expect(editor.textContent).toContain(
+    "@destination.webm",
   );
-  expect(root.querySelector<HTMLTextAreaElement>("textarea")!.value).toContain(
+  expect(editor.textContent).toContain(
     "1.250 s",
   );
-  expect(root.querySelector(".link-summary")!.textContent).toContain(
+  expect(root.querySelector(".prompt-tag")!.textContent).toContain(
     "destination.webm",
   );
   root.remove();

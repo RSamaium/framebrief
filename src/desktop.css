@@ -706,6 +706,51 @@
   font-size: 12px;
   box-shadow: 0 4px 20px #36462111;
 }
+.edge-actions { position: absolute; inset: 21px 0 0; display: flex; align-items: center; justify-content: space-between; pointer-events: none; z-index: 5; }
+.with-audio .edge-actions { bottom: 34px; }
+.edge-actions button { pointer-events: auto; display: grid; place-items: center; flex: 0 0 30px; width: 30px; height: 30px; padding: 0; margin: 0 3px; border-radius: 50%; border: 1px solid #d1d9ca; background: #fffffff2; color: #536448; box-shadow: 0 2px 8px #17201130; cursor: pointer; }
+.edge-actions button:focus-visible { outline: 2px solid #687660; outline-offset: 2px; }
+.prompt-shortcuts button, .scope-toggle { border: 0; background: transparent; color: #687660; font-size: 12px; padding: 5px 8px; border-radius: 6px; }
+.edge-actions button:hover, .prompt-shortcuts button:hover { background: #e7eddf; }
+.prompt-shortcuts { display: flex; gap: 6px; }
+.visual-time video { width: 100%; max-height: 135px; object-fit: contain; background: #111; border-radius: 7px; margin-top: 8px; }
+.time-thumbnails { display: flex; height: 26px; overflow: hidden; margin-top: 6px; border-radius: 4px; }
+.time-thumbnails img { min-width: 0; flex: 1; object-fit: cover; }
+.visual-time label { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
+.visual-time input { width: 100%; }
+.popover { max-height: calc(100dvh - 24px); overflow-y: auto; }
+.prompt-editor { min-height: 76px; padding: 10px 0; font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; outline: none; }
+.prompt-editor:empty::before { content: attr(data-placeholder); color: #91998b; pointer-events: none; }
+.prompt-tag { display: inline; padding: 3px 7px; background: #e9efe3; color: #49623b; border-radius: 7px; cursor: pointer; box-decoration-break: clone; }
+.prompt-tag:hover, .prompt-tag:focus { background: #dce8d3; outline: 1px solid #acbda0; }
+.destination-picker[hidden] { display: none !important; }
+.destination-picker { margin-block: 6px; }
+.destination-picker > button { display: block; width: 100%; text-align: left; padding: 8px; }
+.lane-shell { position: relative; padding-inline: 39px; }
+.lane-shell .lane { margin-inline: 0; }
+.lane-shell .edge-actions { inset: 21px 3px 0; }
+.lane-shell.has-audio .edge-actions { bottom: 34px; }
+.lane-shell .edge-actions button { width: 28px; height: 36px; flex-basis: 28px; border-radius: 10px; background: #f5f7f1; border-color: transparent; box-shadow: none; margin: 0; }
+.lane-shell .edge-actions button:hover { background: #e2eadb; color: #344b28; }
+.tracks { overscroll-behavior-y: contain; scroll-behavior: smooth; }
+.track { transition: background-color 220ms ease, border-color 220ms ease; scroll-margin-block: 24px; }
+.track .lane { transition: height 220ms ease; }
+.time-tooltip { position: fixed; z-index: 100; width: min(430px, calc(100vw - 24px)); box-sizing: border-box; padding: 16px; border: 1px solid #e0e5dc; border-radius: 18px; background: #fff; box-shadow: 0 16px 60px #25341f26; }
+.time-tooltip .visual-time video { max-height: 245px; margin: 10px 0; border-radius: 10px; }
+.time-tooltip .visual-time label { font-size: 13px; color: #6a7661; }
+.time-tooltip output { font-variant-numeric: tabular-nums; font-size: 16px; margin-left: auto; color: #35452c; }
+.time-tooltip input[type="range"] { accent-color: #62774f; height: 26px; cursor: ew-resize; }
+@media (prefers-reduced-motion: reduce) { .tracks { scroll-behavior: auto; } .track, .track .lane { transition: none; } }
+.tracks .track:not(.active) { display: none; }
+.tracks { padding-block: 23px; }
+.timeline-area { position: relative; }
+.track-step { position: absolute; left: 50%; transform: translateX(-50%); z-index: 8; display: grid; place-items: center; width: 38px; height: 22px; border-radius: 12px; background: #f5f7f1e8; color: #859578; border: 1px solid #e3e8dc; cursor: pointer; }
+.track-step.previous { top: 27px; }
+.track-step.next { bottom: 5px; }
+.track-step:hover { color: #405632; background: #e7eddf; }
+.track-step svg { animation: track-hint 2s ease-in-out infinite; }
+@keyframes track-hint { 0%,100% { opacity: .55; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .track-step svg { animation: none; } }
 .drag-ghost {
   background: #e7efd9;
   color: #5e7149;
