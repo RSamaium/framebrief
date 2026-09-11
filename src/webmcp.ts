@@ -56,6 +56,16 @@ const annotationSchema = {
   type: "object",
   properties: {
     scope: { type: "string", enum: ["media"] },
+    action: { type: "string", enum: ["modify", "insert"] },
+    insertion: {
+      type: "object",
+      properties: {
+        position: { type: "string", enum: ["before", "after", "at"] },
+        time: { type: "number", minimum: 0 },
+        useAdjacentFrames: { type: "boolean" },
+      },
+      required: ["position", "time", "useAdjacentFrames"],
+    },
     channel: { type: "string", enum: ["audio", "video"] },
     assistance: { type: "string", enum: ["continue-video"] },
     frameTime: { type: "number", minimum: 0 },

@@ -13,7 +13,8 @@ import { drawingSvg, paintDrawing } from "./drawings";
 import { installWebMcp } from "./webmcp";
 import { renderVideoMd } from "./video-brief";
 import { restoreMedia, saveMedia } from "./media-cache";
-import { PROMPT_GROUPS, START_GROUPS, END_GROUPS } from "./prompt-aids";
+import { promptGroups } from "./prompt-aids";
+import { language, tr } from "./i18n";
 import type { WorkspaceState } from "./workspace-client";
 
 const esc = (s: string) =>
@@ -119,19 +120,25 @@ export class FramebriefApp {
     store = ProjectStore.restore(),
   ) {
     this.store = store;
+    const drawingLabels = [
+      tr("Select (V)", "Sélection (V)"),
+      tr("Rectangle (R)", "Rectangle (R)"),
+      tr("Arrow (A)", "Flèche (A)"),
+      tr("Draw (D)", "Crayon (D)"),
+    ];
     root.innerHTML = `<main class="studio">
-      <button class="command-toggle" title="Commandes · Ctrl/Cmd+K" aria-label="Commandes">⌘</button>
-      <section class="scene"><div class="empty"><span class="drop-glyph">↓</span><p>Déposez une vidéo ou un son</p><button data-cmd="import">ou choisir des fichiers</button></div>
+      <button class="command-toggle" title="${tr("Commands", "Commandes")} · Ctrl/Cmd+K" aria-label="${tr("Commands", "Commandes")}">⌘</button>
+      <section class="scene"><div class="empty"><span class="drop-glyph">↓</span><p>${tr("Drop a video or audio file", "Déposez une vidéo ou un son")}</p><button data-cmd="import">${tr("or choose files", "ou choisir des fichiers")}</button></div>
         <div class="image-stage" hidden><video playsinline preload="auto"></video><svg viewBox="0 0 1000 1000" preserveAspectRatio="none" class="drawing-layer"></svg></div>
         <div class="audio-stage" hidden><span>♫</span><p></p><svg viewBox="0 0 720 100" preserveAspectRatio="none"></svg></div>
-        <div class="offline-note" hidden>Fichier à réassocier <button data-cmd="import">Choisir le fichier</button></div>
-        <div class="draw-tools" hidden>${(["select", "rectangle", "arrow", "freehand"] as Mode[]).map((m, i) => `<button data-mode="${m}" aria-label="${["Sélection (V)", "Rectangle (R)", "Flèche (A)", "Crayon (D)"][i]}" title="${["Sélection · V", "Rectangle · R", "Flèche · A", "Crayon · D"][i]}">${["↖", "▢", "↗", "〰"][i]}</button>`).join("")}<i></i><button data-cmd="undo" title="Annuler">↶</button><button data-cmd="redo" title="Rétablir">↷</button></div>
+        <div class="offline-note" hidden>${tr("File needs reconnecting", "Fichier à réassocier")} <button data-cmd="import">${tr("Choose file", "Choisir le fichier")}</button></div>
+        <div class="draw-tools" hidden>${(["select", "rectangle", "arrow", "freehand"] as Mode[]).map((m, i) => `<button data-mode="${m}" aria-label="${drawingLabels[i]}">${["↖", "▢", "↗", "〰"][i]}</button>`).join("")}<i></i><button data-cmd="undo" title="${tr("Undo", "Annuler")}">↶</button><button data-cmd="redo" title="${tr("Redo", "Rétablir")}">↷</button></div>
       </section>
-      <div class="splitter" role="separator" aria-label="Redimensionner l’aperçu" tabindex="0"></div>
-      <section class="timeline-area"><div class="timeline-top"><span class="active-name"></span><div class="transport"><button data-cmd="play" title="Lecture · Espace" aria-label="Lecture">▶</button><span class="timecode"></span></div><div class="timeline-actions"><button data-cmd="zoom-out" title="Dézoomer">−</button><button data-cmd="zoom-in" title="Zoomer">+</button><button data-cmd="help" title="Raccourcis">?</button></div></div><div class="tracks"></div><div class="center-line"></div></section>
+      <div class="splitter" role="separator" aria-label="${tr("Resize preview", "Redimensionner l’aperçu")}" tabindex="0"></div>
+      <section class="timeline-area"><div class="timeline-top"><span class="active-name"></span><div class="transport"><button data-cmd="play" title="${tr("Play · Space", "Lecture · Espace")}" aria-label="${tr("Play", "Lecture")}">▶</button><span class="timecode"></span></div><div class="timeline-actions"><button data-cmd="zoom-out" title="${tr("Zoom out", "Dézoomer")}">−</button><button data-cmd="zoom-in" title="${tr("Zoom in", "Zoomer")}">+</button><button data-cmd="help" title="${tr("Keyboard shortcuts", "Raccourcis")}">?</button></div></div><div class="tracks"></div><div class="center-line"></div></section>
       <section class="popover" hidden aria-label="Annotation"></section><dialog class="palette"></dialog>
       <input class="files" type="file" accept="video/*,audio/*" multiple hidden><input class="json" type="file" accept=".json" hidden>
-      <div class="drop-overlay" hidden>Déposez pour ajouter au projet</div><div class="toast" role="status" hidden></div><div class="drag-ghost" hidden></div>
+      <div class="drop-overlay" hidden>${tr("Drop to add to the project", "Déposez pour ajouter au projet")}</div><div class="toast" role="status" hidden></div><div class="drag-ghost" hidden></div>
     </main>`;
     this.player = root.querySelector("video")!;
     this.svg = root.querySelector(".drawing-layer")!;
@@ -141,7 +148,7 @@ export class FramebriefApp {
     const finish = document.createElement("button");
     finish.dataset.cmd = "finish-drawing";
     finish.className = "finish-drawing";
-    finish.textContent = "Terminer les dessins →";
+    finish.textContent = tr("Finish drawings →", "Terminer les dessins →");
     finish.hidden = true;
     root.querySelector(".draw-tools")!.append(finish);
     let lastTrackStep = 0;
@@ -163,17 +170,17 @@ export class FramebriefApp {
       .querySelector(".transport")!
       .insertAdjacentHTML(
         "afterbegin",
-        '<button data-cmd="rewind" aria-label="Reculer de 5 secondes" title="Reculer de 5 secondes">↶</button>',
+      `<button data-cmd="rewind" aria-label="${tr("Back 5 seconds", "Reculer de 5 secondes")}" title="${tr("Back 5 seconds", "Reculer de 5 secondes")}">↶</button>`,
       );
     footer
       .querySelector(".transport")!
       .insertAdjacentHTML(
         "beforeend",
-        '<button data-cmd="forward" aria-label="Avancer de 5 secondes" title="Avancer de 5 secondes">↷</button>',
+      `<button data-cmd="forward" aria-label="${tr("Forward 5 seconds", "Avancer de 5 secondes")}" title="${tr("Forward 5 seconds", "Avancer de 5 secondes")}">↷</button>`,
       );
     footer.insertAdjacentHTML(
       "beforeend",
-      '<input class="playback-progress" type="range" min="0" max="1" step="0.01" value="0" aria-label="Position de lecture"><span class="total-time"></span>',
+      `<input class="playback-progress" type="range" min="0" max="1" step="0.01" value="0" aria-label="${tr("Playback position", "Position de lecture")}"><span class="total-time"></span>`,
     );
     footer.querySelector<HTMLInputElement>(".playback-progress")!.oninput = (
       e,
@@ -183,7 +190,7 @@ export class FramebriefApp {
     };
     footer.insertAdjacentHTML(
       "beforeend",
-      `<label class="speed-control"><select aria-label="Vitesse de lecture" title="Vitesse de lecture">${[0.25, 0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) => `<option value="${rate}" ${rate === 1 ? "selected" : ""}>${rate}×</option>`).join("")}</select></label>`,
+      `<label class="speed-control"><select aria-label="${tr("Playback speed", "Vitesse de lecture")}" title="${tr("Playback speed", "Vitesse de lecture")}">${[0.25, 0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) => `<option value="${rate}" ${rate === 1 ? "selected" : ""}>${rate}×</option>`).join("")}</select></label>`,
     );
     root.querySelector(".studio")!.append(footer);
     footer.querySelector("select")!.onchange = (e) => {
@@ -192,7 +199,7 @@ export class FramebriefApp {
     };
     const cursor = root.querySelector<HTMLElement>(".center-line")!;
     cursor.innerHTML =
-      '<button class="playhead-handle" aria-label="Déplacer le curseur de lecture" title="Glisser pour déplacer le curseur"></button>';
+      `<button class="playhead-handle" aria-label="${tr("Move playhead", "Déplacer le curseur de lecture")}" title="${tr("Drag to move the playhead", "Glisser pour déplacer le curseur")}"></button>`;
     cursor.addEventListener("pointerdown", (e) => {
       if (e.button !== 0 || !this.asset()) return;
       e.preventDefault();
@@ -388,7 +395,7 @@ export class FramebriefApp {
         const runtime = this.media.get(v.id),
           width = v.duration * this.scale;
         const images = runtime?.thumbnails ?? [];
-        return `<article class="track ${v.id === this.active ? "active" : ""}" data-video="${esc(v.id)}"><button class="track-label" title="${esc(v.name)}"><span>${String(i + 1).padStart(2, "0")}</span>${esc(v.name)}<small>${formatTime(v.duration)}${runtime ? "" : " · à réassocier"}</small></button><div class="lane"><div class="rail" style="width:${width}px"><div class="nav-band" title="Glisser pour naviguer">${Array.from({ length: Math.min(100, Math.floor(v.duration / 5) + 1) }, (_, i) => `<span style="left:${i * 5 * this.scale}px">${formatTime(i * 5)}</span>`).join("")}</div><div class="frames" data-frames>${v.kind === "audio" ? `<svg class="waveform" viewBox="0 0 ${width} 100" preserveAspectRatio="none">${this.waveform(runtime?.waveform ?? [], width)}</svg>` : images.length ? images.map((src) => `<img src="${src}" draggable="false" alt=""/>`).join("") : '<div class="missing-frames"></div>'}</div><div class="markers"></div></div></div></article>`;
+        return `<article class="track ${v.id === this.active ? "active" : ""}" data-video="${esc(v.id)}"><button class="track-label" title="${esc(v.name)}"><span>${String(i + 1).padStart(2, "0")}</span>${esc(v.name)}<small>${formatTime(v.duration)}${runtime ? "" : ` · ${tr("reconnect", "à réassocier")}`}</small></button><div class="lane"><div class="rail" style="width:${width}px"><div class="nav-band" title="${tr("Drag to navigate", "Glisser pour naviguer")}">${Array.from({ length: Math.min(100, Math.floor(v.duration / 5) + 1) }, (_, i) => `<span style="left:${i * 5 * this.scale}px">${formatTime(i * 5)}</span>`).join("")}</div><div class="frames" data-frames>${v.kind === "audio" ? `<svg class="waveform" viewBox="0 0 ${width} 100" preserveAspectRatio="none">${this.waveform(runtime?.waveform ?? [], width)}</svg>` : images.length ? images.map((src) => `<img src="${src}" draggable="false" alt=""/>`).join("") : '<div class="missing-frames"></div>'}</div><div class="markers"></div></div></div></article>`;
       })
       .join("");
     this.tracks.scrollTop = scroll;
@@ -400,7 +407,7 @@ export class FramebriefApp {
       const button = document.createElement("button");
       button.className = `track-step ${step < 0 ? "previous" : "next"}`;
       button.innerHTML = `<svg width="16" height="12" viewBox="0 0 16 12" aria-hidden="true"><path d="${step < 0 ? "M3 8 8 3 13 8" : "M3 4 8 9 13 4"}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
-      button.title = `${step < 0 ? "Piste précédente" : "Piste suivante"} : ${target.name}`;
+      button.title = `${step < 0 ? tr("Previous track", "Piste précédente") : tr("Next track", "Piste suivante")} : ${target.name}`;
       button.setAttribute("aria-label", button.title);
       button.onclick = () => { this.cancel(); this.activate(target.id); };
       this.tracks.before(button);
@@ -411,18 +418,18 @@ export class FramebriefApp {
       const remove = document.createElement("button");
       remove.className = "remove-track";
       remove.textContent = "×";
-      remove.setAttribute("aria-label", `Retirer la piste ${v.name}`);
-      remove.title = "Retirer cette piste · annulation possible";
+      remove.setAttribute("aria-label", `${tr("Remove track", "Retirer la piste")} ${v.name}`);
+      remove.title = tr("Remove this track · can be undone", "Retirer cette piste · annulation possible");
       remove.onclick = () => {
         this.cancel();
         this.store.removeVideo(id);
         if (this.active === id) this.activate(this.store.project.videos[0]?.id);
-        this.toast("Piste retirée · Ctrl/Cmd+Z pour annuler");
+        this.toast(tr("Track removed · Ctrl/Cmd+Z to undo", "Piste retirée · Ctrl/Cmd+Z pour annuler"));
       };
       track.append(remove);
       const index = document.createElement("div");
       index.className = "annotation-index";
-      index.setAttribute("aria-label", `Annotations de ${v.name}`);
+      index.setAttribute("aria-label", `${tr("Annotations for", "Annotations de")} ${v.name}`);
       track.append(index);
       this.addTrackScrollbar(track, v);
       const edges = document.createElement("div");
@@ -431,7 +438,7 @@ export class FramebriefApp {
         const edit = document.createElement("button");
         edit.className = end ? "edit-end" : "edit-start";
         edit.innerHTML = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z"/></svg>';
-        edit.title = end ? "Annoter la fin ou imaginer la suite" : "Annoter le début ou toute la vidéo";
+        edit.title = end ? tr("Annotate the end or imagine what follows", "Annoter la fin ou imaginer la suite") : tr("Annotate the beginning or whole video", "Annoter le début ou toute la vidéo");
         edit.setAttribute("aria-label", edit.title);
         edit.onpointerdown = (e) => e.stopPropagation();
         edit.onclick = (e) => {
@@ -468,9 +475,9 @@ export class FramebriefApp {
       if (v.kind !== "audio") {
         const audio = document.createElement("div");
         audio.className = "embedded-audio";
-        audio.title = "Son de la vidéo · cliquer ou glisser pour annoter";
+        audio.title = tr("Video audio · click or drag to annotate", "Son de la vidéo · cliquer ou glisser pour annoter");
         const peaks = this.media.get(id)?.waveform;
-        audio.innerHTML = `<svg class="waveform" viewBox="0 0 ${v.duration * this.scale} 100" preserveAspectRatio="none">${this.waveform(peaks ?? [], v.duration * this.scale)}</svg>${!peaks?.length ? "<span>Son non disponible</span>" : ""}`;
+        audio.innerHTML = `<svg class="waveform" viewBox="0 0 ${v.duration * this.scale} 100" preserveAspectRatio="none">${this.waveform(peaks ?? [], v.duration * this.scale)}</svg>${!peaks?.length ? `<span>${tr("Audio unavailable", "Son non disponible")}</span>` : ""}`;
         lane.querySelector(".rail")!.append(audio);
         lane.classList.add("with-audio");
       }
@@ -643,7 +650,7 @@ export class FramebriefApp {
     const scroll = document.createElement("div");
     scroll.className = "track-scroll";
     scroll.innerHTML =
-      '<button class="scroll-thumb" aria-label="Faire défiler la piste" title="Glisser pour parcourir la vidéo"><span></span></button>';
+      `<button class="scroll-thumb" aria-label="${tr("Scroll track", "Faire défiler la piste")}" title="${tr("Drag to browse the video", "Glisser pour parcourir la vidéo")}"><span></span></button>`;
     track.append(scroll);
     scroll.onpointerdown = (e) => {
       if (e.button !== 0) return;
@@ -871,13 +878,14 @@ export class FramebriefApp {
     this.root.querySelectorAll(".destination-picker").forEach(el => el.remove());
     const d = this.draft;
     const duration = this.store.project.videos.find(v => v.id === d.videoId)!.duration;
-    const groups = d.startTime === 0 ? START_GROUPS : d.startTime === duration ? END_GROUPS : PROMPT_GROUPS;
+    const context = d.startTime === 0 ? "start" : d.startTime === duration ? "end" : "middle";
+    const groups = promptGroups(language, context);
     this.pop.hidden = false;
-    this.pop.innerHTML = `<div class="popover-head"><span>${formatTime(d.startTime, true)}${d.endTime !== undefined ? ` — ${formatTime(d.endTime, true)}` : ""}${d.drawings?.length ? ` · ${d.drawings.length} tracé(s)` : ""}</span><button data-cmd="cancel" aria-label="Fermer">×</button></div>
-      <div class="prompt-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Votre intention" data-placeholder="Votre idée… @ pour mentionner une piste">${esc(d.prompt)}</div>
+    this.pop.innerHTML = `<div class="popover-head"><span>${formatTime(d.startTime, true)}${d.endTime !== undefined ? ` — ${formatTime(d.endTime, true)}` : ""}${d.drawings?.length ? ` · ${d.drawings.length} ${tr("drawing(s)", "tracé(s)")}` : ""}</span><button data-cmd="cancel" aria-label="${tr("Close", "Fermer")}">×</button></div>
+      <div class="prompt-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-label="${tr("Your instruction", "Votre intention")}" data-placeholder="${tr("Your idea… @ to mention a track", "Votre idée… @ pour mentionner une piste")}">${esc(d.prompt)}</div>
       <div class="prompt-groups">${groups.map((group, g) => `<section class="prompt-group"><h3><span>${group.icon}</span>${group.label}</h3><div class="suggestions">${group.items.map((item, i) => `<button data-aid="${g}:${i}">${item.label}</button>`).join("")}</div></section>`).join("")}</div>
-      ${d.referenceImages?.[0] ? `<div class="reference-preview"><img src="${d.referenceImages[0].dataUrl}" alt="Capture jointe à cette instruction"><span>Capture jointe</span></div>` : ""}
-      <div class="popover-bottom"><button data-cmd="volume" title="Indiquer un volume">♫</button>${d.volume !== undefined ? `<label>Volume <input aria-label="Volume souhaité" type="range" min="0" max="100" value="${d.volume * 100}"><output>${Math.round(d.volume * 100)} %</output></label>` : ""}<span></span>${d.id ? '<button data-cmd="delete" title="Supprimer l’annotation">⌫</button>' : ""}<button class="save" data-cmd="save">${d.id ? "Enregistrer" : "Annoter"} ↗</button></div>`;
+      ${d.referenceImages?.[0] ? `<div class="reference-preview"><img src="${d.referenceImages[0].dataUrl}" alt="${tr("Reference frame attached to this instruction", "Capture jointe à cette instruction")}"><span>${tr("Frame attached", "Capture jointe")}</span></div>` : ""}
+      <div class="popover-bottom"><button data-cmd="volume" title="${tr("Set volume", "Indiquer un volume")}">♫</button>${d.volume !== undefined ? `<label>${tr("Volume", "Volume")} <input aria-label="${tr("Desired volume", "Volume souhaité")}" type="range" min="0" max="100" value="${d.volume * 100}"><output>${Math.round(d.volume * 100)} %</output></label>` : ""}<span></span>${d.id ? `<button data-cmd="delete" title="${tr("Delete annotation", "Supprimer l’annotation")}">⌫</button>` : ""}<button class="save" data-cmd="save">${d.id ? tr("Save", "Enregistrer") : tr("Annotate", "Annoter")} ↗</button></div>`;
     this.pop.querySelector<HTMLElement>(".prompt-editor")!.oninput = (e) => {
       if (this.draft)
         this.draft.prompt = (e.target as HTMLElement).innerText ?? (e.target as HTMLElement).textContent ?? "";
@@ -889,6 +897,14 @@ export class FramebriefApp {
             const [g, i] = b.dataset.aid!.split(":").map(Number);
             const item = groups[g].items[i];
             if (item.scope === "media") { this.draft.scope = "media"; this.draft.startTime = 0; this.draft.endTime = duration; }
+            this.draft.action = item.action;
+            if (item.action === "insert") {
+              this.draft.insertion = {
+                position: item.insertionPosition ?? "at",
+                time: item.insertionPosition === "after" ? duration : item.insertionPosition === "before" ? 0 : this.draft.startTime,
+                useAdjacentFrames: item.insertionPosition === "at",
+              };
+            } else delete this.draft.insertion;
             this.draft.prompt += (this.draft.prompt ? "\n" : "") + item.prompt;
             if ("assistance" in item && item.assistance)
               this.draft.assistance = item.assistance;
@@ -937,7 +953,7 @@ export class FramebriefApp {
       tag.tabIndex = 0;
       tag.setAttribute("role", "button");
       tag.textContent = token();
-      tag.title = "Choisir l’endroit dans cette piste";
+      tag.title = tr("Choose a position in this track", "Choisir l’endroit dans cette piste");
       tag.onclick = openTime;
       tag.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); openTime(); } };
       return tag;
@@ -947,7 +963,7 @@ export class FramebriefApp {
       this.root.append(panel);
       panel.classList.add("time-tooltip");
       panel.hidden = false;
-      panel.innerHTML = `<div class="visual-time"><div class="popover-head"><span></span></div><video muted playsinline preload="auto"></video><label>Placer à cet endroit<input aria-label="Temps de destination en secondes" type="range" min="0" step="0.01"><output></output></label></div>`;
+      panel.innerHTML = `<div class="visual-time"><div class="popover-head"><span></span></div><video muted playsinline preload="auto"></video><label>${tr("Place here", "Placer à cet endroit")}<input aria-label="${tr("Destination time in seconds", "Temps de destination en secondes")}" type="range" min="0" step="0.01"><output></output></label></div>`;
       panel.querySelector(".popover-head span")!.textContent = selected.name;
       const input = panel.querySelector("input")!, preview = panel.querySelector("video")!;
       input.max = String(selected.duration);
@@ -959,7 +975,7 @@ export class FramebriefApp {
         if (runtime && preview.readyState >= 1) preview.currentTime = Math.min(Number(input.value), Math.max(0, selected!.duration - 0.04));
       };
       if (runtime) { preview.src = runtime.url; preview.onloadedmetadata = update; }
-      else { const note = document.createElement("p"); note.textContent = "Réassociez cette vidéo pour voir l’aperçu."; preview.after(note); }
+      else { const note = document.createElement("p"); note.textContent = tr("Reconnect this video to preview it.", "Réassociez cette vidéo pour voir l’aperçu."); preview.after(note); }
       update();
       input.oninput = () => {
         update();
@@ -1530,23 +1546,23 @@ export class FramebriefApp {
     }
   }
   private commands(help = false): void {
-    this.palette.innerHTML = `<header><span>${help ? "Raccourcis" : "Commandes"}</span><button data-close aria-label="Fermer">×</button></header>${
+    this.palette.innerHTML = `<header><span>${help ? tr("Keyboard shortcuts", "Raccourcis") : tr("Commands", "Commandes")}</span><button data-close aria-label="${tr("Close", "Fermer")}">×</button></header>${
       help
-        ? "<dl><dt>Espace</dt><dd>Lecture / pause</dd><dt>← / → · Maj</dt><dd>0,1 s / 1 s</dd><dt>V · R · A · D</dt><dd>Sélection · rectangle · flèche · crayon</dd><dt>Ctrl/Cmd + Z · Maj</dt><dd>Annuler / rétablir</dd><dt>Ctrl/Cmd + Entrée</dt><dd>Enregistrer l’annotation</dd><dt>Suppr · Échap</dt><dd>Supprimer · annuler</dd><dt>Ctrl/Cmd + K</dt><dd>Commandes</dd></dl>"
-        : `<input class="project-name" aria-label="Nom du projet" value="${esc(this.store.project.name)}">${[
-            ["rename", "Renommer le projet"],
-            ["import", "Ajouter ou réassocier des médias"],
-            ["export", "Exporter les annotations JSON"],
+        ? tr("<dl><dt>Space</dt><dd>Play / pause</dd><dt>← / → · Shift</dt><dd>0.1 s / 1 s</dd><dt>V · R · A · D</dt><dd>Select · rectangle · arrow · draw</dd><dt>Ctrl/Cmd + Z · Shift</dt><dd>Undo / redo</dd><dt>Ctrl/Cmd + Enter</dt><dd>Save annotation</dd><dt>Delete · Escape</dt><dd>Delete · cancel</dd><dt>Ctrl/Cmd + K</dt><dd>Commands</dd></dl>", "<dl><dt>Espace</dt><dd>Lecture / pause</dd><dt>← / → · Maj</dt><dd>0,1 s / 1 s</dd><dt>V · R · A · D</dt><dd>Sélection · rectangle · flèche · crayon</dd><dt>Ctrl/Cmd + Z · Maj</dt><dd>Annuler / rétablir</dd><dt>Ctrl/Cmd + Entrée</dt><dd>Enregistrer l’annotation</dd><dt>Suppr · Échap</dt><dd>Supprimer · annuler</dd><dt>Ctrl/Cmd + K</dt><dd>Commandes</dd></dl>")
+        : `<input class="project-name" aria-label="${tr("Project name", "Nom du projet")}" value="${esc(this.store.project.name)}">${[
+            ["rename", tr("Rename project", "Renommer le projet")],
+            ["import", tr("Add or reconnect media", "Ajouter ou réassocier des médias")],
+            ["export", tr("Export JSON annotations", "Exporter les annotations JSON")],
             [
               "export-video-md",
-              `Exporter VIDEO.md · ${this.store.project.brief.status === "ready" ? "brief prêt" : "brief à compléter"}`,
+              `${tr("Export", "Exporter")} VIDEO.md · ${this.store.project.brief.status === "ready" ? tr("brief ready", "brief prêt") : tr("brief incomplete", "brief à compléter")}`,
             ],
-            ["import-json", "Importer un projet JSON"],
-            ["undo", "Annuler"],
-            ["redo", "Rétablir"],
-            ["remove", "Retirer le média actif"],
-            ["new", "Nouveau projet"],
-            ["help", "Raccourcis clavier"],
+            ["import-json", tr("Import JSON project", "Importer un projet JSON")],
+            ["undo", tr("Undo", "Annuler")],
+            ["redo", tr("Redo", "Rétablir")],
+            ["remove", tr("Remove active media", "Retirer le média actif")],
+            ["new", tr("New project", "Nouveau projet")],
+            ["help", tr("Keyboard shortcuts", "Raccourcis clavier")],
           ]
             .map(
               ([cmd, label]) =>
@@ -1574,6 +1590,26 @@ export class FramebriefApp {
     )!;
     if (asset.kind !== "audio") {
       if (this.media.has(asset.id)) {
+        if (draft.insertion?.useAdjacentFrames) {
+          const times = [
+            Math.max(0, draft.insertion.time - 0.1),
+            Math.min(asset.duration, draft.insertion.time + 0.1),
+          ];
+          draft.referenceImages = [];
+          for (const [index, time] of times.entries()) {
+            const adjacent = await this.captureFrame(
+              { videoId: asset.id, time, compact: true },
+              [],
+            );
+            draft.referenceImages.push({
+              purpose: index === 0 ? "annotation" : "continuation",
+              time: adjacent.time,
+              width: adjacent.width,
+              height: adjacent.height,
+              dataUrl: `data:${adjacent.mimeType};base64,${adjacent.data}`,
+            });
+          }
+        } else {
         const frame = await this.captureFrame(
           {
             videoId: asset.id,
@@ -1591,6 +1627,7 @@ export class FramebriefApp {
             dataUrl: `data:${frame.mimeType};base64,${frame.data}`,
           },
         ];
+        }
         if (draft.assistance === "continue-video") {
           const last = await this.captureFrame(
             {
@@ -1603,7 +1640,7 @@ export class FramebriefApp {
             },
             [],
           );
-          draft.referenceImages.push({
+          draft.referenceImages!.push({
             purpose: "continuation",
             time: last.time,
             width: last.width,

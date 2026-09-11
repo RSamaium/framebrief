@@ -145,8 +145,8 @@ it("keeps the player and prompt intact during project changes; keyboard does not
   expect(svg.querySelectorAll("[data-shape]")).toHaveLength(2);
   root.querySelector<HTMLButtonElement>(".finish-drawing")!.click();
   expect(root.querySelector<HTMLElement>(".popover")!.hidden).toBe(false);
-  expect(root.querySelector(".popover-head")!.textContent).toContain(
-    "2 tracé(s)",
+  expect(root.querySelector(".popover-head")!.textContent).toMatch(
+    /2 (drawing|tracé)\(s\)/,
   );
   root.querySelector<HTMLButtonElement>(".edit-start")!.click();
   root.querySelector<HTMLButtonElement>('[data-aid="0:0"]')!.click();

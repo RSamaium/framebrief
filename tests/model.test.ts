@@ -4,6 +4,7 @@ import { createProject, ProjectStore } from "../src/store";
 import type { ProjectManifest, VideoAsset } from "../src/types";
 import { formatTime, isValidRegion, normalizeRegion } from "../src/utils";
 import { renderVideoMd } from "../src/video-brief";
+import { promptGroups } from "../src/prompt-aids";
 
 const video: VideoAsset = {
   kind: "video",
@@ -38,6 +39,35 @@ describe("time and region utilities", () => {
 });
 
 describe("manifest contract", () => {
+  it("distinguishes editing from inserting a scene and preserves insertion references", () => {
+    const store = new ProjectStore({ ...createProject(), videos: [video] });
+    const inserted = store.saveAnnotation({
+      videoId: video.id,
+      startTime: 8,
+      prompt: "Create a bridge",
+      action: "insert",
+      insertion: { position: "at", time: 8, useAdjacentFrames: true },
+    });
+    expect(inserted.context).toContain("insérer une nouvelle scène");
+    expect(inserted.context).toContain("frames adjacentes");
+    expect(() => store.saveAnnotation({
+      videoId: video.id,
+      startTime: 8,
+      prompt: "Missing insertion point",
+      action: "insert",
+    })).toThrow(/point d’insertion/);
+  });
+
+  it("offers contextual insertion prompts in English and French", () => {
+    expect(promptGroups("en", "middle").map(group => group.label)).toContain("Insert a new scene");
+    expect(promptGroups("fr", "start").map(group => group.label)).toContain("Ajouter avant la vidéo");
+    expect(promptGroups("en", "end")[0].items[0]).toMatchObject({
+      action: "insert",
+      insertionPosition: "after",
+      assistance: "continue-video",
+    });
+  });
+
   it("preserves whole-media scope, editable provenance and exact insertion target", () => {
     const v = {
       ...video,

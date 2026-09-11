@@ -40,6 +40,12 @@ export interface VideoAsset {
 }
 
 export interface Annotation {
+  action?: "modify" | "insert";
+  insertion?: {
+    position: "before" | "after" | "at";
+    time: number;
+    useAdjacentFrames: boolean;
+  };
   scope?: "media";
   channel?: "audio" | "video";
   referenceImages?: ReferenceImage[];
@@ -118,6 +124,8 @@ export interface VideoBrief {
 }
 
 export interface DraftAnnotation {
+  action?: "modify" | "insert";
+  insertion?: Annotation["insertion"];
   scope?: "media";
   channel?: "audio" | "video";
   referenceImages?: ReferenceImage[];

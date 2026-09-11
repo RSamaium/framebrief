@@ -26,6 +26,21 @@ export function validateDraft(d: DraftAnnotation, videos: VideoAsset[]): void {
     throw new Error("Canal invalide.");
   const v = videos.find((v) => v.id === d.videoId);
   if (!v) throw new Error("Vidéo inconnue : le média ciblé n’existe pas.");
+  if (d.action !== undefined && !["modify", "insert"].includes(d.action))
+    throw new Error("Action invalide.");
+  if (d.action === "insert" && !d.insertion)
+    throw new Error("Une nouvelle scène doit préciser son point d’insertion.");
+  if (d.insertion) {
+    if (
+      d.action !== "insert" ||
+      !["before", "after", "at"].includes(d.insertion.position) ||
+      !finite(d.insertion.time) ||
+      d.insertion.time < 0 ||
+      d.insertion.time > v.duration ||
+      typeof d.insertion.useAdjacentFrames !== "boolean"
+    )
+      throw new Error("Insertion invalide.");
+  }
   if (d.scope === "media" && (d.startTime !== 0 || d.endTime !== v.duration))
     throw new Error("Une instruction globale doit couvrir tout le média.");
   if (d.assistance !== undefined && d.assistance !== "continue-video")
@@ -145,6 +160,10 @@ export function describeAnnotation(
       ? ` Cible : ${a.channel === "audio" ? "bande sonore" : "image"}.`
       : "") +
     (a.scope === "media" ? " Portée : média entier." : "") +
+    (a.action === "modify" ? " Action : modifier le contenu existant." : "") +
+    (a.insertion
+      ? ` Action : insérer une nouvelle scène ${a.insertion.position === "before" ? "avant" : a.insertion.position === "after" ? "après" : "à"} ${a.insertion.time.toFixed(3)} s${a.insertion.useAdjacentFrames ? ", avec les frames adjacentes comme références" : ""}.`
+      : "") +
     (a.intention ? ` Intention : ${a.intention}.` : "") +
     (a.referenceImages?.length
       ? ` Captures jointes : ${a.referenceImages.map((image) => `${image.purpose} à ${image.time.toFixed(3)} s (${image.width} × ${image.height})`).join(", ")}.`
@@ -238,6 +257,8 @@ export function annotationFromDraft(
   for (const key of [
     "referenceImages",
     "scope",
+    "action",
+    "insertion",
     "assistance",
     "channel",
     "endTime",
