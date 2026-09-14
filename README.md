@@ -4,6 +4,17 @@ A visual-review POC that turns gestures on a video timeline into structured anno
 
 ## Getting started
 
+### Install the global CLI
+
+```bash
+npm install -g framebrief
+framebrief serve --workspace /absolute/path/to/project
+```
+
+Upgrade with `npm update -g framebrief`; remove it with `npm uninstall -g framebrief`.
+
+### Develop locally
+
 ```bash
 npm install
 npm run dev

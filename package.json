@@ -1,16 +1,28 @@
 {
   "name": "framebrief",
+  "description": "Visual video review workspace for precise AI-ready editing instructions.",
   "private": false,
   "version": "0.1.0",
+  "license": "MIT",
+  "keywords": ["video", "review", "annotations", "ai", "webmcp", "cli"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RSamaium/framebrief.git"
+  },
+  "homepage": "https://github.com/RSamaium/framebrief#readme",
+  "bugs": { "url": "https://github.com/RSamaium/framebrief/issues" },
+  "engines": { "node": ">=20" },
+  "publishConfig": { "access": "public" },
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build && vite build --ssr src/standalone-server.ts --outDir dist-server",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
   },
   "bin": { "framebrief": "bin/framebrief.mjs" },
-  "files": ["dist", "dist-server", "bin", "README.md"],
+  "files": ["dist", "dist-server", "bin", "README.md", "LICENSE"],
   "devDependencies": {
     "@types/node": "^24.0.0",
     "fake-indexeddb": "^6.2.5",
