@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Annotation Review"
+  short_description: "Turn Framebrief reviews into video renders"
+  default_prompt: "Use $video-annotation-review to turn this Framebrief review into a validated video render."

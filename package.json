@@ -22,7 +22,7 @@
     "prepublishOnly": "npm run build"
   },
   "bin": { "framebrief": "bin/framebrief.mjs" },
-  "files": ["dist", "dist-server", "bin", "README.md", "LICENSE"],
+  "files": ["dist", "dist-server", "bin", "README.md", "LICENSE", "thumb.png"],
   "devDependencies": {
     "@types/node": "^24.0.0",
     "fake-indexeddb": "^6.2.5",
