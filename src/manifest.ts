@@ -135,6 +135,17 @@ export function validateDraft(d: DraftAnnotation, videos: VideoAsset[]): void {
     )
       throw new Error("Destination invalide.");
   }
+  if (d.mediaReference) {
+    const target = videos.find((v) => v.id === d.mediaReference!.videoId);
+    if (
+      !target ||
+      target.kind === "audio" ||
+      !finite(d.mediaReference.time) ||
+      d.mediaReference.time < 0 ||
+      d.mediaReference.time > target.duration
+    )
+      throw new Error("Référence vidéo invalide.");
+  }
 }
 export function describeAnnotation(
   a: DraftAnnotation,
@@ -152,6 +163,9 @@ export function describeAnnotation(
       : "") +
     (a.destination
       ? ` Insérer ce passage dans ${name(a.destination.videoId)} [${a.destination.videoId}] à ${a.destination.time.toFixed(3)} s.`
+      : "") +
+    (a.mediaReference
+      ? ` Référence vidéo : ${name(a.mediaReference.videoId)} [${a.mediaReference.videoId}] à ${a.mediaReference.time.toFixed(3)} s.`
       : "") +
     (a.volume !== undefined
       ? ` Volume souhaité : ${Math.round(a.volume * 100)} %.`
@@ -266,6 +280,7 @@ export function annotationFromDraft(
     "drawings",
     "frameTime",
     "destination",
+    "mediaReference",
     "volume",
   ] as const)
     if (d[key] !== undefined)

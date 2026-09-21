@@ -78,6 +78,14 @@ const annotationSchema = {
       },
       required: ["videoId", "time"],
     },
+    mediaReference: {
+      type: "object",
+      properties: {
+        videoId: { type: "string" },
+        time: { type: "number", minimum: 0 },
+      },
+      required: ["videoId", "time"],
+    },
     drawings: {
       type: "array",
       items: {
@@ -284,7 +292,8 @@ export function registerWebMcpTools(
           (item) =>
             (!videoId ||
               item.videoId === videoId ||
-              item.destination?.videoId === videoId) &&
+              item.destination?.videoId === videoId ||
+              item.mediaReference?.videoId === videoId) &&
             (!annotationId || item.id === annotationId),
         );
       return response(annotations, `${annotations.length} annotation(s).`);

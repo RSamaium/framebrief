@@ -93,7 +93,7 @@ export class ProjectStore extends EventTarget {
     this.checkpoint();
     this.project.videos = this.project.videos.filter((v) => v.id !== id);
     this.project.annotations = this.project.annotations.filter(
-      (a) => a.videoId !== id && a.destination?.videoId !== id,
+      (a) => a.videoId !== id && a.destination?.videoId !== id && a.mediaReference?.videoId !== id,
     );
     this.commit();
   }

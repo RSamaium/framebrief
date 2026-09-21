@@ -42,7 +42,7 @@ The agent creates a short preview first, opens Framebrief in its integrated brow
 - Build deterministic compositions, animated text, transitions, and overlays with HyperFrames.
 - Generate a new image, video, music, or voice only through an explicitly approved provider such as fal.ai or Replicate.
 - Let the agent use FFmpeg behind the scenes for native edits such as cuts, trimming, crops, rotation, speed changes, audio mixing, and export.
-- Use `@` in a prompt to choose another track and visually pick where a passage should be inserted.
+- Use `@` in a prompt on a single moment to cite a frame from another video. On a selected range, use it to choose where that passage should be inserted.
 - Annotate video sound or an imported audio track, including a desired volume.
 - Reopen any annotation from the timeline, edit it, delete it, or undo/redo a change.
 
@@ -75,6 +75,8 @@ Framebrief keeps a workspace checkpoint in `video.review.json` and a production 
 The skill uses each media item’s source metadata to choose the correct editing path: it updates a HyperFrames, Remotion, or Manim source when present, and uses FFmpeg for native-video operations. AI providers remain opt-in and must be explicitly authorized in `VIDEO.md`.
 
 When supported by the browser, WebMCP exposes the same project, annotation, reference-image, and frame-capture data to the agent. WebMCP is optional: the core review workflow works without it.
+
+In the annotation data, a point mention is saved as `mediaReference: { videoId, time }`; a range insertion uses `destination: { videoId, time }`. Both times are seconds in the linked video.
 
 </details>
 

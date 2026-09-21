@@ -62,6 +62,7 @@ export interface Annotation {
   drawings?: Drawing[];
   frameTime?: number;
   destination?: { videoId: string; time: number };
+  mediaReference?: { videoId: string; time: number };
   volume?: number;
   context?: string;
 }
@@ -133,6 +134,7 @@ export interface DraftAnnotation {
   drawings?: Drawing[];
   frameTime?: number;
   destination?: { videoId: string; time: number };
+  mediaReference?: { videoId: string; time: number };
   volume?: number;
   id?: string;
   videoId: string;

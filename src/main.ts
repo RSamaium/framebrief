@@ -16,7 +16,7 @@ async function start() {
     if (workspace) store.storageKey = null;
     const app = new FramebriefApp(root!, store);
     if (workspace) {
-      await app.loadWorkspace(workspace);
+      const loading = app.loadWorkspace(workspace);
       syncWorkspace(
         store,
         workspace,
@@ -24,6 +24,7 @@ async function start() {
         () => app.canReloadWorkspace(),
         (message) => app.reportWorkspace(message),
       );
+      await loading;
     }
   } catch (error) {
     root!.textContent =

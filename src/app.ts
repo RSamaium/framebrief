@@ -63,7 +63,6 @@ export class FramebriefApp {
   }
   async loadWorkspace(state: WorkspaceState): Promise<void> {
     this.loadingWorkspace = true;
-    this.root.inert = true;
     try {
       this.workspaceMode = true;
       const active = this.active;
@@ -79,6 +78,12 @@ export class FramebriefApp {
         }
       }
       this.store.loadCheckpoint(state.project);
+      this.workspaceVersions = state.mediaVersions;
+      this.activate(
+        state.project.videos.some((v) => v.id === active)
+          ? active
+          : state.project.videos[0]?.id,
+      );
       for (const asset of state.project.videos) {
         if (
           !asset.source ||
@@ -86,33 +91,30 @@ export class FramebriefApp {
           state.mediaVersions[asset.id] === "missing"
         )
           continue;
-        const res = await fetch(
-          `/api/workspace/media?id=${encodeURIComponent(asset.id)}&revision=${encodeURIComponent(state.mediaVersions[asset.id] ?? "")}`,
-          { cache: "no-store" },
-        );
-        if (!res.ok) {
-          this.toast(`Rendu introuvable : ${asset.name}`);
-          continue;
-        }
-        const file = new File([await res.blob()], asset.name, {
-          type: asset.type,
-        });
         try {
+          const res = await fetch(
+            `/api/workspace/media?id=${encodeURIComponent(asset.id)}&revision=${encodeURIComponent(state.mediaVersions[asset.id] ?? "")}`,
+            { cache: "no-store" },
+          );
+          if (!res.ok) throw new Error(`Rendu introuvable : ${asset.name}`);
+          const file = new File([await res.blob()], asset.name, {
+            type: asset.type,
+          });
           const inspected = await inspectMedia(file);
+          if (!this.store.project.videos.some((v) => v.id === asset.id)) {
+            URL.revokeObjectURL(inspected.runtime.url);
+            continue;
+          }
           this.media.set(asset.id, inspected.runtime);
-        } catch {
-          this.toast(`Le navigateur ne peut pas lire ${asset.name}.`);
+          if (this.active === asset.id) this.activate(asset.id);
+          else this.renderTracks();
+        } catch (error) {
+          this.toast(error instanceof Error ? error.message : `Le navigateur ne peut pas lire ${asset.name}.`);
         }
       }
-      this.workspaceVersions = state.mediaVersions;
-      this.activate(
-        state.project.videos.some((v) => v.id === active)
-          ? active
-          : state.project.videos[0]?.id,
-      );
     } finally {
       this.loadingWorkspace = false;
-      this.root.inert = false;
+      this.activate(this.active);
     }
   }
   constructor(
@@ -342,8 +344,13 @@ export class FramebriefApp {
       !v || v.kind === "audio" || !runtime;
     this.root.querySelector<HTMLElement>(".audio-stage")!.hidden =
       !v || v.kind !== "audio" || !runtime;
-    this.root.querySelector<HTMLElement>(".offline-note")!.hidden =
-      !v || !!runtime;
+    const loading = !!v?.source && this.loadingWorkspace && !runtime;
+    const offlineNote = this.root.querySelector<HTMLElement>(".offline-note")!;
+    offlineNote.hidden = !v || !!runtime;
+    offlineNote.firstChild!.textContent = loading
+      ? tr("Loading video… ", "Chargement de la vidéo… ")
+      : tr("File needs reconnecting ", "Fichier à réassocier ");
+    offlineNote.querySelector("button")!.hidden = loading;
     this.root.querySelector<HTMLElement>(".draw-tools")!.hidden =
       !v || v.kind === "audio" || !runtime;
     this.root.querySelector(".active-name")!.textContent = v?.name ?? "";
@@ -395,7 +402,7 @@ export class FramebriefApp {
         const runtime = this.media.get(v.id),
           width = v.duration * this.scale;
         const images = runtime?.thumbnails ?? [];
-        return `<article class="track ${v.id === this.active ? "active" : ""}" data-video="${esc(v.id)}"><button class="track-label" title="${esc(v.name)}"><span>${String(i + 1).padStart(2, "0")}</span>${esc(v.name)}<small>${formatTime(v.duration)}${runtime ? "" : ` · ${tr("reconnect", "à réassocier")}`}</small></button><div class="lane"><div class="rail" style="width:${width}px"><div class="nav-band" title="${tr("Drag to navigate", "Glisser pour naviguer")}">${Array.from({ length: Math.min(100, Math.floor(v.duration / 5) + 1) }, (_, i) => `<span style="left:${i * 5 * this.scale}px">${formatTime(i * 5)}</span>`).join("")}</div><div class="frames" data-frames>${v.kind === "audio" ? `<svg class="waveform" viewBox="0 0 ${width} 100" preserveAspectRatio="none">${this.waveform(runtime?.waveform ?? [], width)}</svg>` : images.length ? images.map((src) => `<img src="${src}" draggable="false" alt=""/>`).join("") : '<div class="missing-frames"></div>'}</div><div class="markers"></div></div></div></article>`;
+        return `<article class="track ${v.id === this.active ? "active" : ""}" data-video="${esc(v.id)}"><button class="track-label" title="${esc(v.name)}"><span>${String(i + 1).padStart(2, "0")}</span>${esc(v.name)}<small>${formatTime(v.duration)}${runtime ? "" : ` · ${v.source && this.loadingWorkspace ? tr("loading…", "chargement…") : tr("reconnect", "à réassocier")}`}</small></button><div class="lane"><div class="rail" style="width:${width}px"><div class="nav-band" title="${tr("Drag to navigate", "Glisser pour naviguer")}">${Array.from({ length: Math.min(100, Math.floor(v.duration / 5) + 1) }, (_, i) => `<span style="left:${i * 5 * this.scale}px">${formatTime(i * 5)}</span>`).join("")}</div><div class="frames" data-frames>${v.kind === "audio" ? `<svg class="waveform" viewBox="0 0 ${width} 100" preserveAspectRatio="none">${this.waveform(runtime?.waveform ?? [], width)}</svg>` : images.length ? images.map((src) => `<img src="${src}" draggable="false" alt=""/>`).join("") : '<div class="missing-frames"></div>'}</div><div class="markers"></div></div></div></article>`;
       })
       .join("");
     this.tracks.scrollTop = scroll;
@@ -651,7 +658,7 @@ export class FramebriefApp {
     scroll.className = "track-scroll";
     scroll.innerHTML =
       `<button class="scroll-thumb" aria-label="${tr("Scroll track", "Faire défiler la piste")}" title="${tr("Drag to browse the video", "Glisser pour parcourir la vidéo")}"><span></span></button>`;
-    track.append(scroll);
+    track.querySelector(".annotation-index")!.before(scroll);
     scroll.onpointerdown = (e) => {
       if (e.button !== 0) return;
       e.preventDefault();
@@ -939,13 +946,26 @@ export class FramebriefApp {
     panel.className = "destination-picker";
     panel.hidden = true;
     editor.after(panel);
-    let selected = targets.find(v => v.id === d.destination?.videoId);
+    const linked = () => d.endTime === undefined ? d.mediaReference : d.destination;
+    const setLinked = (videoId: string, time: number) => {
+      if (d.endTime === undefined) {
+        d.mediaReference = { videoId, time };
+        delete d.destination;
+      } else {
+        d.destination = { videoId, time };
+        delete d.mediaReference;
+      }
+    };
+    let selected = targets.find(v => v.id === linked()?.videoId);
     let mentionRange: Range | undefined;
     const sync = () => {
       d.prompt = editor.innerText ?? editor.textContent ?? "";
-      if (!editor.querySelector(".prompt-tag")) delete d.destination;
+      if (!editor.querySelector(".prompt-tag")) {
+        delete d.destination;
+        delete d.mediaReference;
+      }
     };
-    const token = () => selected ? `@${selected.name}${d.destination ? ` · ${d.destination.time.toFixed(3)} s` : ""}` : "";
+    const token = () => selected ? `@${selected.name}${linked() ? ` · ${linked()!.time.toFixed(3)} s` : ""}` : "";
     const createTag = () => {
       const tag = document.createElement("span");
       tag.className = "prompt-tag";
@@ -953,7 +973,9 @@ export class FramebriefApp {
       tag.tabIndex = 0;
       tag.setAttribute("role", "button");
       tag.textContent = token();
-      tag.title = tr("Choose a position in this track", "Choisir l’endroit dans cette piste");
+      tag.title = d.endTime === undefined
+        ? tr("Choose a reference moment in this video", "Choisir le moment de référence dans cette vidéo")
+        : tr("Choose a position in this track", "Choisir l’endroit dans cette piste");
       tag.onclick = openTime;
       tag.onkeydown = e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); openTime(); } };
       return tag;
@@ -967,7 +989,7 @@ export class FramebriefApp {
       panel.querySelector(".popover-head span")!.textContent = selected.name;
       const input = panel.querySelector("input")!, preview = panel.querySelector("video")!;
       input.max = String(selected.duration);
-      input.value = String(d.destination?.time ?? 0);
+      input.value = String(linked()?.time ?? 0);
       const runtime = this.media.get(selected.id);
       preview.hidden = !runtime;
       const update = () => {
@@ -982,7 +1004,7 @@ export class FramebriefApp {
         const time = Number(input.value);
         if (!Number.isFinite(time) || time < 0 || time > selected!.duration) return;
         this.rememberDraft();
-        d.destination = { videoId: selected!.id, time };
+        setLinked(selected!.id, time);
         editor.querySelector(".prompt-tag")!.textContent = token();
         sync(); this.paintMarkers();
       };
@@ -992,7 +1014,7 @@ export class FramebriefApp {
     };
     editor.addEventListener("pointerdown", e => { if (!(e.target as Element).closest(".prompt-tag")) panel.hidden = true; });
     editor.addEventListener("focus", () => { panel.hidden = true; });
-    if (selected && d.destination) {
+    if (selected && linked()) {
       const oldToken = `@${selected.name}`;
       const start = d.prompt.indexOf(oldToken);
       // Keep the rest of the user's prose intact when restoring a saved mention.
@@ -1023,9 +1045,9 @@ export class FramebriefApp {
         button.textContent = target.name;
         button.onclick = () => {
           selected = target;
-          // A destination is a single structured reference in the manifest.
+          // A point links a reference frame; a range links an insertion destination.
           editor.querySelector(".prompt-tag")?.replaceWith(document.createTextNode(editor.querySelector(".prompt-tag")!.textContent ?? ""));
-          d.destination = { videoId: target.id, time: 0 };
+          setLinked(target.id, 0);
           if (mentionRange) {
             mentionRange.deleteContents();
             const tag = createTag();
@@ -1502,6 +1524,7 @@ export class FramebriefApp {
       if (cmd === "unlink" && this.draft) {
         this.rememberDraft();
         delete this.draft.destination;
+        delete this.draft.mediaReference;
         this.showPopover();
         this.paintMarkers();
       }

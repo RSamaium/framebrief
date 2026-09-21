@@ -99,6 +99,24 @@ describe("manifest contract", () => {
       "tout le média",
     );
   });
+
+  it("saves a point annotation that references another video without treating it as an insertion destination", () => {
+    const target = { ...video, id: "target", name: "combat.mp4" };
+    const store = new ProjectStore({ ...createProject(), videos: [video, target] });
+    const annotation = store.saveAnnotation({
+      videoId: video.id,
+      startTime: 8,
+      prompt: "Show a lava arena using @combat.mp4 · 0.000 s",
+      mediaReference: { videoId: target.id, time: 0 },
+    });
+    expect(annotation.endTime).toBeUndefined();
+    expect(annotation.mediaReference).toEqual({ videoId: target.id, time: 0 });
+    expect(annotation.context).toContain("Référence vidéo : combat.mp4");
+    expect(parseManifest(JSON.parse(serializeManifest(store.project))).annotations[0].mediaReference)
+      .toEqual(annotation.mediaReference);
+    expect(() => store.saveAnnotation({ ...annotation, mediaReference: { videoId: target.id, time: 25 } }))
+      .toThrow("Référence vidéo invalide.");
+  });
   it("migrates existing projects to a deterministic VIDEO.md brief", () => {
     const legacy = {
       ...createProject(),

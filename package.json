@@ -2,7 +2,7 @@
   "name": "framebrief",
   "description": "Visual video review workspace for precise AI-ready editing instructions.",
   "private": false,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "license": "MIT",
   "keywords": ["video", "review", "annotations", "ai", "webmcp", "cli"],
   "repository": {

@@ -179,3 +179,83 @@ it("keeps the player and prompt intact during project changes; keyboard does not
   );
   root.remove();
 });
+
+it("saves a point annotation with a video mention as a media reference", async () => {
+  localStorage.clear();
+  const root = document.createElement("div");
+  document.body.append(root);
+  const project = createProject();
+  project.videos = [
+    { id: "promo", kind: "video", name: "promo.mp4", duration: 58, width: 1920, height: 1080, size: 1, type: "video/mp4", lastModified: 1, addedAt: project.createdAt },
+    { id: "demo", kind: "video", name: "demo.mp4", duration: 144.2, width: 1920, height: 1080, size: 1, type: "video/mp4", lastModified: 1, addedAt: project.createdAt },
+  ];
+  const store = new ProjectStore(project);
+  const initial = store.saveAnnotation({ videoId: "promo", startTime: 14.58, prompt: "Show a lava arena" });
+  new FramebriefApp(root, store);
+  const track = root.querySelector<HTMLElement>(".track")!;
+  expect(track.querySelector(".track-scroll")!.nextElementSibling).toBe(
+    track.querySelector(".annotation-index"),
+  );
+  root.querySelector<HTMLButtonElement>(`[data-id="${initial.id}"]`)!.click();
+  const editor = root.querySelector<HTMLElement>(".prompt-editor")!;
+  editor.textContent = "Show a lava arena using @";
+  const selection = window.getSelection()!;
+  const caret = document.createRange();
+  caret.setStart(editor.firstChild!, editor.textContent.length);
+  caret.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(caret);
+  editor.dispatchEvent(new Event("input"));
+  root.querySelector<HTMLButtonElement>('[data-target="demo"]')!.click();
+  root.querySelector<HTMLButtonElement>('[data-cmd="save"]')!.click();
+  await vi.waitFor(() => expect(store.project.annotations[0].mediaReference).toBeDefined());
+  expect(store.project.annotations[0].mediaReference).toEqual({ videoId: "demo", time: 0 });
+  expect(store.project.annotations[0].endTime).toBeUndefined();
+  root.remove();
+});
+
+it("keeps the workspace interactive while its videos load", async () => {
+  localStorage.clear();
+  const root = document.createElement("div");
+  document.body.append(root);
+  const project = createProject();
+  project.videos = [{
+    id: "video",
+    kind: "video",
+    name: "render.mp4",
+    type: "video/mp4",
+    duration: 30,
+    width: 1920,
+    height: 1080,
+    size: 1,
+    lastModified: 1,
+    addedAt: project.createdAt,
+    source: { engine: "native", path: "render.mp4", renderPath: "render.mp4" },
+  }];
+  const app = new FramebriefApp(root, new ProjectStore(project));
+  let finishFetch!: (response: Response) => void;
+  const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(
+    () => new Promise<Response>((resolve) => { finishFetch = resolve; }),
+  );
+  try {
+    const loading = app.loadWorkspace({
+      enabled: true,
+      workspaceId: "test",
+      revision: "1",
+      project,
+      mediaVersions: { video: "1" },
+    });
+    expect(root.inert).not.toBe(true);
+    expect(root.querySelector(".track.active")).not.toBeNull();
+    expect(root.querySelector(".offline-note")!.textContent).toMatch(/Loading video|Chargement de la vidéo/);
+    expect(root.querySelector<HTMLElement>(".offline-note button")!.hidden).toBe(true);
+    expect(app.canReloadWorkspace()).toBe(false);
+    finishFetch(new Response(null, { status: 404 }));
+    await loading;
+    expect(app.canReloadWorkspace()).toBe(true);
+    expect(root.querySelector<HTMLElement>(".offline-note button")!.hidden).toBe(false);
+  } finally {
+    fetchSpy.mockRestore();
+    root.remove();
+  }
+});
