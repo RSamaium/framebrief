@@ -7,7 +7,7 @@ description: Turn a Framebrief review and VIDEO.md into a validated video render
 
 Use this skill when Framebrief annotations are the human review surface. Read `VIDEO.md` at the active workspace root before selecting a renderer. Then read the project, annotations, and attached annotation images through WebMCP.
 
-Before opening a review, ensure the Framebrief CLI is available globally. If `framebrief` is not on `PATH`, run `npm install -g framebrief` and verify `framebrief --help`. If npm is unavailable or installation fails, report the blocker before attempting the review workflow.
+Before opening a review, ensure the Framebrief CLI is available globally. If `framebrief` is not on `PATH`, run `npm install -g framebrief`. Check the installed version with `npm ls -g framebrief --depth=0` and the published version with `npm view framebrief version`; when the registry has a newer version, upgrade with `npm install -g framebrief@latest`. Verify `framebrief --help` before continuing. If the registry cannot be reached, report that the update check was unavailable and use the installed CLI only if it works.
 
 If `VIDEO.md` is missing or its brief is draft/incomplete, ask only for the missing production decisions: goal, output format/duration, visual direction, source rights, and explicit authorization for any external provider. Create or update `VIDEO.md`, then synchronize the same complete brief with `update_video_project_brief`. Never store or echo API keys; record only provider/model, authorization, and whether a key is configured.
 
@@ -42,7 +42,7 @@ Keep the local Framebrief server running while awaiting the user's annotations. 
 
 ## Review gate
 
-Once Framebrief is open, explicitly ask the user to annotate the result and confirm when they are finished. Then stop: do not inspect, consume, archive, or render annotations while the review remains open. An explicit confirmation that the review is complete is the gate for the next production pass.
+Once Framebrief is open, invite the user to annotate the result and clearly confirm when finished. Then stop: do not inspect, consume, archive, or render annotations while the review remains open. An explicit confirmation that the review is complete is the gate for the next production pass.
 
 When the gate arrives, retrieve a fresh project from WebMCP (`get_video_annotation_project`, `list_video_annotations`, and relevant `get_annotation_images`) or from the current workspace checkpoint. Do not rely on the annotations read before opening the review. Treat this fresh snapshot as the submitted review, then perform the requested changes. Keep the server open during the render so the updated output can reload into the same review session.
 

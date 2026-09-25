@@ -88,6 +88,12 @@ npm run dev
 npm test
 ```
 
+## Publishing
+
+Releases are published to npm by GitHub Actions when a version tag is pushed. Before the first release, configure **npm Trusted Publishing** for the `framebrief` package with GitHub owner `RSamaium`, repository `framebrief`, and workflow filename `publish.yml`. Allow direct `npm publish`; no long-lived npm token is needed in GitHub secrets.
+
+For each release, update the package version, commit the change, and push a matching tag such as `v0.1.2`. The workflow verifies that the tag matches `package.json`, runs the tests and build, inspects the package contents, then publishes it to npm using OIDC.
+
 ## License
 
 [MIT](LICENSE)
