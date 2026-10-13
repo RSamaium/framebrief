@@ -134,6 +134,7 @@ export class FramebriefApp {
         <div class="image-stage" hidden><video playsinline preload="auto"></video><svg viewBox="0 0 1000 1000" preserveAspectRatio="none" class="drawing-layer"></svg></div>
         <div class="audio-stage" hidden><span>♫</span><p></p><svg viewBox="0 0 720 100" preserveAspectRatio="none"></svg></div>
         <div class="offline-note" hidden>${tr("File needs reconnecting", "Fichier à réassocier")} <button data-cmd="import">${tr("Choose file", "Choisir le fichier")}</button></div>
+        <button class="fullscreen-toggle" data-cmd="fullscreen" title="${tr("Full screen · F", "Plein écran · F")}" aria-label="${tr("Full screen", "Plein écran")}">⛶</button>
         <div class="draw-tools" hidden>${(["select", "rectangle", "arrow", "freehand"] as Mode[]).map((m, i) => `<button data-mode="${m}" aria-label="${drawingLabels[i]}">${["↖", "▢", "↗", "〰"][i]}</button>`).join("")}<i></i><button data-cmd="undo" title="${tr("Undo", "Annuler")}">↶</button><button data-cmd="redo" title="${tr("Redo", "Rétablir")}">↷</button></div>
       </section>
       <div class="splitter" role="separator" aria-label="${tr("Resize preview", "Redimensionner l’aperçu")}" tabindex="0"></div>
@@ -155,6 +156,18 @@ export class FramebriefApp {
     root.querySelector(".draw-tools")!.append(finish);
     let lastTrackStep = 0;
     this.tracks.addEventListener("wheel", (event) => {
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+        const lane = this.activeLane();
+        if (!lane || !event.deltaY) return;
+        const left = lane.getBoundingClientRect().left + 16;
+        const x = clamp(event.clientX - left, 0, Math.max(0, lane.clientWidth - 32));
+        const pivot = this.viewStart + x / this.scale;
+        this.scale = clamp(this.scale * Math.exp(-event.deltaY * 0.01), 10, 800);
+        this.viewStart = Math.max(0, pivot - x / this.scale);
+        this.renderTracks();
+        return;
+      }
       if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY) || this.store.project.videos.length < 2) return;
       event.preventDefault();
       if (this.draft || Math.abs(event.deltaY) < 4 || Date.now() - lastTrackStep < 420) return;
@@ -207,7 +220,7 @@ export class FramebriefApp {
       e.preventDefault();
       this.player.pause();
       cursor.setPointerCapture(e.pointerId);
-      const lane = this.tracks.querySelector(".lane")!.getBoundingClientRect();
+      const lane = this.activeLane()!.getBoundingClientRect();
       const start = this.viewStart;
       const move = (ev: PointerEvent) =>
         this.seek(start + (ev.clientX - lane.left - 16) / this.scale);
@@ -271,6 +284,10 @@ export class FramebriefApp {
     this.bindDrawing();
     this.bindSplitter();
     document.addEventListener("keydown", (e) => this.keyboard(e));
+    document.addEventListener("fullscreenchange", () => {
+      this.fitStage();
+      this.paintDrawings();
+    });
     this.store.addEventListener("change", () => {
       this.renderTracks();
       this.paintDrawings();
@@ -518,7 +535,7 @@ export class FramebriefApp {
   ): void {
     if (
       e.button !== 0 ||
-      (e.target as HTMLElement).closest(".marker,.range-handle")
+      (e.target as HTMLElement).closest(".marker,.range-handle,.resize-handle")
     )
       return;
     const duration = this.store.project.videos.find(
@@ -615,6 +632,13 @@ export class FramebriefApp {
     lane.addEventListener("pointerup", up);
     lane.addEventListener("pointercancel", cancel, { once: true });
   }
+  // Inactive tracks are display:none, so only the active lane has a real box.
+  private activeLane(): HTMLElement | null {
+    return (
+      this.tracks.querySelector<HTMLElement>(".track.active .lane") ??
+      this.tracks.querySelector<HTMLElement>(".lane")
+    );
+  }
   private paintTime(follow = true): void {
     const duration = this.asset()?.duration ?? 0;
     const progress =
@@ -627,7 +651,7 @@ export class FramebriefApp {
       `${duration ? (this.time / duration) * 100 : 0}%`,
     );
     this.root.querySelector(".total-time")!.textContent = formatTime(duration);
-    const lane = this.tracks.querySelector(".lane")?.getBoundingClientRect();
+    const lane = this.activeLane()?.getBoundingClientRect();
     const cursor = this.root.querySelector<HTMLElement>(".center-line")!;
     if (lane && lane.width > 40) {
       const visible = (lane.width - 32) / this.scale;
@@ -788,7 +812,7 @@ export class FramebriefApp {
         .join("");
       if (this.draft?.videoId === id) {
         const d = this.draft;
-        layer.innerHTML += `<div class="selection" style="left:${d.startTime * this.scale}px;width:${Math.max(3, ((d.endTime ?? d.startTime) - d.startTime) * this.scale)}px">${d.endTime !== undefined ? '<button class="range-handle" title="Déposer ce passage ailleurs">⠿</button>' : ""}</div>`;
+        layer.innerHTML += `<div class="selection" style="left:${d.startTime * this.scale}px;width:${Math.max(3, ((d.endTime ?? d.startTime) - d.startTime) * this.scale)}px">${d.endTime !== undefined ? `<button class="resize-handle start" data-edge="start" aria-label="${tr("Resize start", "Ajuster le début")}" title="${tr("Drag to resize", "Glisser pour redimensionner")}"></button>` : ""}<button class="resize-handle end" data-edge="end" aria-label="${tr("Resize end", "Ajuster la fin")}" title="${tr("Drag to resize", "Glisser pour redimensionner")}"></button>${d.endTime !== undefined ? '<button class="range-handle" title="Déposer ce passage ailleurs">⠿</button>' : ""}</div>`;
       }
       if (this.draft?.destination?.videoId === id)
         layer.innerHTML += `<div class="target-marker" style="left:${this.draft.destination.time * this.scale}px">↙</div>`;
@@ -812,7 +836,66 @@ export class FramebriefApp {
       layer
         .querySelector<HTMLElement>(".range-handle")
         ?.addEventListener("pointerdown", (e) => this.movePassage(e));
+      layer
+        .querySelectorAll<HTMLElement>(".resize-handle")
+        .forEach((h) =>
+          h.addEventListener("pointerdown", (e) =>
+            this.resizeSelection(e, h.dataset.edge as "start" | "end", track),
+          ),
+        );
     });
+  }
+  private resizeSelection(
+    e: PointerEvent,
+    edge: "start" | "end",
+    track: HTMLElement,
+  ): void {
+    if (e.button !== 0 || !this.draft) return;
+    e.stopPropagation();
+    e.preventDefault();
+    const asset = this.store.project.videos.find(
+      (v) => v.id === this.draft!.videoId,
+    )!;
+    const lane = track.querySelector<HTMLElement>(".lane")!;
+    const handle = e.currentTarget as HTMLElement;
+    handle.setPointerCapture(e.pointerId);
+    this.rememberDraft();
+    this.pop.hidden = true;
+    const min = 0.05;
+    const at = (x: number) =>
+      clamp(
+        this.viewStart + (x - lane.getBoundingClientRect().left - 16) / this.scale,
+        0,
+        asset.duration,
+      );
+    const move = (ev: PointerEvent) => {
+      const d = this.draft;
+      if (!d) return;
+      const t = at(ev.clientX);
+      if (edge === "start") {
+        d.startTime = Math.min(t, (d.endTime ?? d.startTime) - min);
+        d.startTime = Math.max(0, d.startTime);
+        if (d.frameTime !== undefined && d.frameTime < d.startTime)
+          d.frameTime = d.startTime;
+      } else {
+        const end = Math.max(t, d.startTime + min);
+        d.endTime = Math.min(end, asset.duration);
+      }
+      this.paintMarkers();
+    };
+    const up = () => {
+      handle.removeEventListener("pointermove", move);
+      handle.removeEventListener("pointerup", up);
+      handle.removeEventListener("pointercancel", up);
+      if (this.draft) {
+        this.anchor = { x: handle.getBoundingClientRect().left, y: handle.getBoundingClientRect().top };
+        this.showPopover();
+        this.paintMarkers();
+      }
+    };
+    handle.addEventListener("pointermove", move);
+    handle.addEventListener("pointerup", up);
+    handle.addEventListener("pointercancel", up);
   }
   private movePassage(e: PointerEvent): void {
     e.stopPropagation();
@@ -1423,9 +1506,15 @@ export class FramebriefApp {
       this.command("delete");
     }
     if (e.key === "?") this.commands(true);
+    if (e.key.toLowerCase() === "f" && !mod) this.command("fullscreen");
   }
   private command(cmd: string): void {
     try {
+      if (cmd === "fullscreen") {
+        const scene = this.root.querySelector<HTMLElement>(".scene")!;
+        if (document.fullscreenElement) void document.exitFullscreen();
+        else void scene.requestFullscreen?.();
+      }
       if (cmd === "rewind") this.seek(this.time - 5);
       if (cmd === "forward") this.seek(this.time + 5);
       if (cmd === "import")
