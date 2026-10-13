@@ -26,6 +26,18 @@ If the submitted preview review contains annotations, apply them to the editable
 - When the brief requests green/blue-screen work, install `RSamaium/greenscreen` only if its skill is absent. Check `rustc`, `ffmpeg`, `ffprobe`, and GPU support; produce a short matte or checkerboard preview before a final render. Report an unavailable GPU and offer FFmpeg chromakey as a fallback instead of silently changing methods.
 - Use Remotion, Manim, or another renderer only when explicitly selected in `VIDEO.md` or the current user request.
 
+## Incremental re-renders
+
+Never re-render the whole video for a localized annotation. Rendering is the slowest step, so shrink it:
+
+- Structure HyperFrames sources as one sub-composition per scene (`compositions/<scene>.html`, mounted from `index.html` with `data-composition-src`). Keep a map of scene → time range in `VIDEO.md`.
+- Map each annotation's `startTime`/`endTime` to the scenes it overlaps. Edit only those scenes. Leave the others untouched.
+- Render only the affected scenes with `npx hyperframes render --composition compositions/<scene>.html --quality draft --output renders/segments/<scene>.mp4`. Reuse the existing segment file for every unchanged scene.
+- Rebuild the full file by concatenating segments in order with FFmpeg (`-f concat`, `-c copy` when codecs/fps/resolution match, otherwise re-encode only the seams). Update the review render path with the concatenated file.
+- Use `--quality draft` for every review iteration. Run `--quality delivery` once, for the whole video, only after the user confirms the review is satisfactory.
+- Annotations that change the whole video (global color, audio mix, resolution) are the only reason for a full render. Say so before starting it.
+- Before rendering, validate cheaply with `npx hyperframes check` and `npx hyperframes snapshot --range <start>:<end> --frames 8` on the affected range.
+
 ## External generation and voice
 
 An image/video/music/TTS/transcription/translation/dubbing provider is opt-in. Do not call it until the user authorizes the named provider in `VIDEO.md` or the current request. For ElevenLabs, check configuration presence without reading or printing secret values; skip the integration when the key is absent.
